@@ -25,6 +25,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 
+@CrossOrigin(origins = "http://localhost:5173")
 @RestController
 @RequestMapping("/api/events")
 public class EventController {
@@ -107,7 +108,6 @@ public class EventController {
             }
         }
     }
-
 
     @PutMapping("update/{id}")
     @Operation(summary = "Update event information", responses = {
