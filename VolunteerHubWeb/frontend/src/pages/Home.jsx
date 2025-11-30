@@ -1,5 +1,8 @@
 import Banner from "../components/Banner";
-import { FaUserFriends, FaCalendarCheck, FaCheckCircle, FaClock } from "react-icons/fa";
+import EventCard from "../components/EventCard";
+import { FaUserFriends, FaCalendarCheck, FaCheckCircle, FaClock, FaStar } from "react-icons/fa";
+import { useState, useEffect } from "react";
+import axios from "axios";
 
 export default function Home() {
   const stats = [
@@ -24,6 +27,52 @@ export default function Home() {
       title: "Tham gia & tạo tác động",
       desc: "Tham gia sự kiện, kết nối cộng đồng và nhận chứng nhận sau khi hoàn thành.",
       icon: "💚",
+    },
+  ];
+
+  const [events, setEvents] = useState([]);
+  const [category, setCategory] = useState("Tất cả");
+  const [loading, setLoading] = useState(true);
+
+  const categories = ["Tất cả", "Môi trường", "Từ thiện", "Giáo dục", "Y tế", "Cộng đồng"];
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const res = await axios.get("/api/events/all");
+        setEvents(res.data);
+      } catch (err) {
+        console.error("Lỗi tải danh sách sự kiện:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEvents();
+  }, []);
+
+  const filteredEvents =
+    category === "Tất cả"
+      ? events
+      : events.filter((e) => e.category?.name === category);
+
+  const testimonials = [
+    {
+      avatar: "https://source.unsplash.com/100x100/?woman,portrait,1",
+      name: "Nguyễn Thị Mai",
+      role: "Tình nguyện viên",
+      quote: "Tham gia Volunteer Hub đã thay đổi cuộc sống của tôi. Tôi đã gặp được nhiều người bạn tuyệt vời và cùng nhau tạo ra những đóng góp tích cực cho cộng đồng.",
+    },
+    {
+      avatar: "https://source.unsplash.com/100x100/?man,portrait,2",
+      name: "Trần Văn Hưng",
+      role: "Quản lý sự kiện",
+      quote: "Nền tảng này giúp tôi dễ dàng tìm kiếm và quản lý các hoạt động tình nguyện. Giao diện thân thiện và tính năng đa dạng.",
+    },
+    {
+      avatar: "https://source.unsplash.com/100x100/?woman,portrait,3",
+      name: "Lê Thị Hoa",
+      role: "Sinh viên",
+      quote: "Là sinh viên, tôi có thể tham gia các hoạt động tình nguyện phù hợp với lịch học. Đây là cách tuyệt vời để phát triển bản thân.",
     },
   ];
 
@@ -103,30 +152,101 @@ export default function Home() {
         </div>
       </section>
 
-      {/*Sự kiện nổi bật */}
+      {/* Sự kiện nổi bật*/}
       <section className="bg-gray-50 py-14">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-2xl font-bold text-center text-green-700 mb-8">Sự kiện nổi bật</h2>
+          <h2 className="text-4xl font-bold text-center text-emerald-700 mb-8">Tìm đam mê của bạn</h2>
+          <p className="text-center text-gray-600 mb-8">Khám phá các hoạt động tình nguyện đang diễn ra phù hợp với sở thích và khả năng của bạn.</p>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white rounded-xl shadow hover:shadow-lg transition p-4">
-                <img
-                  src={`https://source.unsplash.com/600x400/?volunteer,community,${i}`}
-                  alt="Sự kiện"
-                  className="rounded-lg mb-4 h-48 w-full object-cover"
-                />
-                <h3 className="font-semibold text-lg text-gray-800 mb-2">
-                  Sự kiện tình nguyện #{i}
-                </h3>
-                <p className="text-sm text-gray-600 mb-3">
-                  Hỗ trợ dọn dẹp công viên, trồng cây xanh và lan tỏa thông điệp xanh.
-                </p>
-                <button className="bg-green-600 text-white py-2 px-4 rounded-lg text-sm hover:bg-green-700 transition">
-                  Xem chi tiết
-                </button>
+          {/* Các nút lọc category */}
+          <div className="flex justify-center gap-4 mb-12 flex-wrap">
+            {categories.map((c) => (
+              <button
+                key={c}
+                onClick={() => setCategory(c)}
+                className={`px-4 py-1.5 rounded-full text-sm border transition ${category === c
+                  ? "bg-emerald-600 text-white border-emerald-600"
+                  : "bg-gray-100 text-gray-700 hover:bg-emerald-100 border-gray-300"
+                  }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+
+          {/* Danh sách 3 sự kiện */}
+          {loading ? (
+            <p className="text-center text-gray-600">Đang tải sự kiện...</p>
+          ) : (
+            <div className="grid md:grid-cols-3 gap-6">
+              {filteredEvents.slice(0, 3).map((event) => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </div>
+          )}
+
+          {/* Button xem tất cả sự kiện */}
+          <div className="text-center mt-8">
+            <a href="/events" className="bg-emerald-600 text-white py-3 px-8 rounded-full text-sm hover:bg-emerald-700 transition inline-block">
+              Xem tất cả sự kiện
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* Câu chuyện từ cộng đồng */}
+      <section className="bg-green-50 py-20">
+        <div className="max-w-6xl mx-auto text-center">
+          <h2 className="text-4xl font-bold text-emerald-700 mb-4">Câu chuyện từ cộng đồng</h2>
+          <p className="text-gray-600 mb-12">Nghe những chia sẻ chân thực từ các tình nguyện viên trong cộng đồng của chúng ta</p>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {testimonials.map((testimonial, index) => (
+              <div key={index} className="bg-white p-6 rounded-xl shadow-md">
+                <img src={testimonial.avatar} alt={testimonial.name} className="w-16 h-16 rounded-full mx-auto mb-4" />
+                <div className="flex justify-center mb-2">
+                  {[...Array(5)].map((_, i) => (
+                    <FaStar key={i} className="text-yellow-400" />
+                  ))}
+                </div>
+                <p className="text-gray-600 text-sm mb-4">"{testimonial.quote}"</p>
+                <h4 className="font-semibold text-gray-800">{testimonial.name}</h4>
+                <p className="text-gray-500 text-xs">{testimonial.role}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Đăng ký nhận tin tức */}
+      <section className="bg-gray-50 py-20">
+        <div className="max-w-6xl mx-auto text-center">
+          <h2 className="text-4xl font-bold text-emerald-700 mb-4">Đăng ký nhận tin tức</h2>
+          <p className="text-gray-600 mb-8">Nhận thông tin về các sự kiện mới nhất và câu chuyện truyền cảm hứng từ cộng đồng tình nguyện viên</p>
+          <div className="flex justify-center items-center gap-4 max-w-md mx-auto">
+            <input
+              type="email"
+              placeholder="Nhập email của bạn"
+              className="flex-1 px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:border-emerald-500"
+            />
+            <button className="bg-emerald-600 text-white px-6 py-3 rounded-lg hover:bg-emerald-700 transition">
+              Đăng ký
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Đối tác của chúng tôi */}
+      <section className="bg-green-50 py-20">
+        <div className="max-w-6xl mx-auto text-center">
+          <h2 className="text-4xl font-bold text-emerald-700 mb-4">Đối tác của chúng tôi</h2>
+          <p className="text-gray-600 mb-12">Cùng hợp tác với các tổ chức uy tín để tạo ra tác động lớn hơn</p>
+          <div className="flex justify-center items-center gap-20 flex-wrap">
+            <img src="src\assets\Logo_of_UNICEF.svg" alt="UNICEF" className="h-10" />
+            <img src="src\assets\American Red Cross_idC5TEOZ59_0.svg" alt="+" className="h-10" />
+            <img src="src\assets\WWF_logo_svg.png" alt="WWF" className="h-10" />
+            <img src="src\assets\OX_HL_C_RGB.png" alt="Oxfam" className="h-10" />
+            <img src="src\assets\habitat-for-humanity-seeklogo.png" alt="Habitat for Humanity" className="h-10" />
           </div>
         </div>
       </section>

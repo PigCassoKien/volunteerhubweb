@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:8080/api", // thay bằng domain thật khi deploy
+  baseURL: "https://localhost:8080/api", // thay bằng domain thật khi deploy
   timeout: 10000,
 });
 

@@ -2,7 +2,7 @@ import { FiCalendar, FiBell } from "react-icons/fi";
 
 export default function CreateEvent() {
   return (
-    <div className="max-w-7xl mx-auto bg-emerald-700 text-white py-12 text-center rounded-3xl mb-0 px-6">
+    <div className="max-w-7xl mx-auto bg-emerald-700 text-white py-12 text-center rounded-3xl mb-10 px-6">
       <h3 className="text-2xl font-semibold mb-3">
         Không tìm thấy sự kiện phù hợp?
       </h3>

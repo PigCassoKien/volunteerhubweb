@@ -1,18 +1,25 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
-import { FiUser, FiMail, FiLock } from "react-icons/fi";
+import { useState, useEffect } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { FiUser, FiMail, FiLock, FiPhone, FiMapPin } from "react-icons/fi";
 
 export default function Register() {
   const [formData, setFormData] = useState({
-    name: "",
+    fullName: "",
     email: "",
     password: "",
     confirmPassword: "",
+    phoneNumber: "",
+    address: "",
   });
   const [loading, setLoading] = useState(false);
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otp, setOtp] = useState("");
   const navigate = useNavigate();
+
+  // Scroll lên đầu khi vào trang
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -37,21 +44,20 @@ export default function Register() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fullName: formData.name.trim(),
+          fullName: formData.fullName.trim(),
           email: formData.email.toLowerCase().trim(),
           password: formData.password,
-          phoneNumber: "",
-          address: "",
+          phoneNumber: formData.phoneNumber.trim(),
+          address: formData.address.trim(),
           role: "VOLUNTEER",
         }),
       });
 
-      const text = await res.text(); // Đọc thân phản hồi một lần dưới dạng văn bản
-
+      const text = await res.text();
       let data;
       try {
-        data = JSON.parse(text); // Cố gắng phân tích thành JSON
-      } catch (parseErr) {
+        data = JSON.parse(text);
+      } catch {
         throw new Error(text || "Server trả về dữ liệu không hợp lệ");
       }
 
@@ -68,7 +74,6 @@ export default function Register() {
     }
   };
 
-  // Xác thực OTP
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     if (otp.length !== 6) {
@@ -77,40 +82,32 @@ export default function Register() {
     }
 
     try {
-      const res = await fetch("/api/otp/verify", {  
+      const res = await fetch("/api/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: formData.email,
           code: otp,
-          type: "REGISTER"
+          type: "REGISTER",
         }),
       });
 
-      // Đọc text trước để kiểm tra (body chỉ đọc 1 lần)
       const text = await res.text();
-
       if (!res.ok) {
         let errorData = {};
         try {
           errorData = JSON.parse(text);
-        } catch {
-          throw new Error(text || "Lỗi server không xác định");
-        }
+        } catch { }
         throw new Error(errorData.message || "Mã OTP không đúng");
       }
 
-      // Nếu text không rỗng, parse JSON; nếu rỗng, coi như thành công (không token)
       let data = {};
       if (text.trim()) {
         try {
           data = JSON.parse(text);
-        } catch {
-          // Nếu parse thất bại nhưng res.ok, bỏ qua
-        }
+        } catch { }
       }
 
-      // Nếu có token, lưu
       if (data.token) {
         localStorage.setItem("token", data.token);
       }
@@ -124,101 +121,60 @@ export default function Register() {
 
   return (
     <>
-      {/* Form đăng ký */}
-      <div className="flex items-center justify-center py-10 bg-gray-50">
-        <div className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-md">
-          <h2 className="text-2xl font-bold text-center text-green-700 mb-6">
+      <div className="flex items-center justify-center bg-gray-50 py-10 px-2">
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-md grid gap-3"
+        >
+          <h2 className="text-2xl font-bold text-center text-green-700 mb-2">
             Tạo tài khoản VolunteerHub
           </h2>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-base text-gray-600 mb-1">Họ và tên</label>
-              <div className="flex items-center border rounded-lg px-3 py-2">
-                <FiUser className="text-gray-400 mr-2" />
-                <input
-                  name="name"
-                  type="text"
-                  placeholder="Nhập họ tên"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                  className="w-full outline-none"
-                  disabled={loading}
-                />
-              </div>
-            </div>
+          {/* Họ tên + SĐT*/}
+          <div className="flex gap-3">
+            <InputField
+              icon={<FiUser />}
+              label="Họ và tên"
+              name="fullName"
+              value={formData.fullName}
+              onChange={handleChange}
+              placeholder="Nhập họ và tên"
+              className="flex-1"
+            />
+            <InputField
+              icon={<FiPhone />}
+              label="Số điện thoại"
+              name="phoneNumber"
+              value={formData.phoneNumber}
+              onChange={handleChange}
+              placeholder="Nhập số điện thoại"
+              className="flex-1"
+            />
+          </div>
 
-            <div>
-              <label className="block text-base text-gray-600 mb-1">Email</label>
-              <div className="flex items-center border rounded-lg px-3 py-2">
-                <FiMail className="text-gray-400 mr-2" />
-                <input
-                  name="email"
-                  type="email"
-                  placeholder="Nhập email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                  className="w-full outline-none"
-                  disabled={loading}
-                />
-              </div>
-            </div>
+          <InputField icon={<FiMail />} label="Email" name="email" type="email" value={formData.email} onChange={handleChange} placeholder="Nhập email" />
+          <InputField icon={<FiMapPin />} label="Địa chỉ" name="address" value={formData.address} onChange={handleChange} placeholder="Nhập địa chỉ" />
+          <InputField icon={<FiLock />} label="Mật khẩu" name="password" type="password" value={formData.password} onChange={handleChange} placeholder="Nhập mật khẩu" />
+          <InputField icon={<FiLock />} label="Xác nhận mật khẩu" name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleChange} placeholder="Nhập lại mật khẩu" />
 
-            <div>
-              <label className="block text-base text-gray-600 mb-1">Mật khẩu</label>
-              <div className="flex items-center border rounded-lg px-3 py-2">
-                <FiLock className="text-gray-400 mr-2" />
-                <input
-                  name="password"
-                  type="password"
-                  placeholder="Nhập mật khẩu"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  className="w-full outline-none"
-                  disabled={loading}
-                />
-              </div>
-            </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition disabled:opacity-70"
+          >
+            {loading ? "Đang tạo tài khoản..." : "Đăng ký"}
+          </button>
 
-            <div>
-              <label className="block text-base text-gray-600 mb-1">Xác nhận mật khẩu</label>
-              <div className="flex items-center border rounded-lg px-3 py-2">
-                <FiLock className="text-gray-400 mr-2" />
-                <input
-                  name="confirmPassword"
-                  type="password"
-                  placeholder="Nhập lại mật khẩu"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  required
-                  className="w-full outline-none"
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition disabled:opacity-70"
-            >
-              {loading ? "Đang tạo tài khoản..." : "Đăng ký"}
-            </button>
-
-            <p className="text-sm text-center text-gray-600 mt-3">
-              Đã có tài khoản?{" "}
-              <Link to="/login" className="text-green-600 hover:underline">
-                Đăng nhập ngay
-              </Link>
-            </p>
-          </form>
-        </div>
+          <p className="text-sm text-center text-gray-600 mt-2">
+            Đã có tài khoản?{" "}
+            <Link to="/login" className="text-green-600 hover:underline">
+              Đăng nhập ngay
+            </Link>
+          </p>
+        </form>
       </div>
 
-      {/* Modal OTP*/}
+      {/* Modal OTP */}
       {showOtpModal && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
@@ -226,19 +182,18 @@ export default function Register() {
               Nhập mã OTP
             </h3>
             <p className="text-center text-gray-600 mb-8 text-sm">
-              Mã đã được gửi đến email:
-              <br />
+              Mã đã được gửi đến email: <br />
               <strong>{formData.email}</strong>
             </p>
 
-            <form onSubmit={handleVerifyOtp}>
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
               <input
                 type="text"
                 maxLength={6}
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                 placeholder="000000"
-                className="w-full text-center text-4xl font-bold tracking-widest py-4 border-2 border-gray-300 rounded-xl focus:border-green-600 outline-none mb-6"
+                className="w-full text-center text-4xl font-bold tracking-widest py-4 border-2 border-gray-300 rounded-xl focus:border-green-600 outline-none"
                 autoFocus
               />
 
@@ -255,7 +210,7 @@ export default function Register() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-green-600 text-white py- py-2.5 rounded-lg font-medium hover:bg-green-700 transition"
+                  className="flex-1 bg-green-600 text-white py-2.5 rounded-lg font-medium hover:bg-green-700 transition"
                 >
                   Xác nhận
                 </button>
@@ -272,5 +227,18 @@ export default function Register() {
         </div>
       )}
     </>
+  );
+}
+
+// Component reusable cho Input
+function InputField({ icon, label, className = "", ...props }) {
+  return (
+    <div className={`flex-1 ${className}`}>
+      <label className="block text-gray-600 text-sm mb-1">{label}</label>
+      <div className="flex items-center border rounded-lg px-3 py-2">
+        {icon}
+        <input {...props} className="w-full outline-none ml-2" />
+      </div>
+    </div>
   );
 }

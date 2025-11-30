@@ -39,7 +39,8 @@ public class SecurityConfig {
                                 "/api/otp/generate",
                                 "/api/users/reset-password",
                                 "/api/dashboard/**",
-                                "/api/events/all"
+                                "/api/events/all",
+                                "/api/events/get/**"
                         ).permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/events/**").hasAnyRole("EVENT_MANAGER", "ADMIN")

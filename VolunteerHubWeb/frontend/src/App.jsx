@@ -8,6 +8,7 @@ import Login from "./pages/Auth/Login";
 import Register from "./pages/Auth/Register";
 import Profile from "./pages/User/Profile";
 import EventDetail from "./pages/Event/EventDetail";
+import CommunityPage from "./pages/CommunityPage";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -36,6 +37,7 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/events/:id" element={<EventDetail />} />
+            <Route path="/community" element={<CommunityPage />} />
           </Routes>
         </main>
         <Footer />

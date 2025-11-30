@@ -39,6 +39,21 @@ const EventList = () => {
         style={{ backgroundImage: "url('/images/banner-events.jpg')" }}
       >
         <div className="absolute inset-0 bg-emerald-800/50"></div>
+
+        <div className="absolute top-5 left-0 w-full z-20">
+          <div className="max-w-7xl mx-auto px-4">
+            <nav className="text-white/90 text-sm">
+              <ol className="flex items-center space-x-2">
+                <li>
+                  <a href="/" className="hover:text-white">Trang chủ</a>
+                </li>
+                <li>/</li>
+                <li className="font-semibold text-white">Danh sách sự kiện</li>
+              </ol>
+            </nav>
+          </div>
+        </div>
+
         <div className="relative z-10 text-white">
           <h1 className="text-5xl font-bold">Khám phá các sự kiện</h1>
           <p className="mt-3 text-lg">
@@ -73,11 +88,10 @@ const EventList = () => {
               <button
                 key={c}
                 onClick={() => setCategory(c)}
-                className={`px-4 py-1.5 rounded-full text-sm border transition flex items-center gap-1 ${
-                  category === c
-                    ? "bg-emerald-600 text-white border-emerald-600"
-                    : "bg-gray-100 text-gray-700 hover:bg-emerald-100 border-gray-300"
-                }`}
+                className={`px-4 py-1.5 rounded-full text-sm border transition flex items-center gap-1 ${category === c
+                  ? "bg-emerald-600 text-white border-emerald-600"
+                  : "bg-gray-100 text-gray-700 hover:bg-emerald-100 border-gray-300"
+                  }`}
               >
                 {c}
               </button>
@@ -101,9 +115,9 @@ const EventList = () => {
       <div className="max-w-6xl mx-auto mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
         {!loading &&
           filteredEvents.map((event) => (
-  <EventCard key={event.id} event={event} />
-))
-}
+            <EventCard key={event.id} event={event} />
+          ))
+        }
       </div>
 
       <div className="text-center pb-16">
