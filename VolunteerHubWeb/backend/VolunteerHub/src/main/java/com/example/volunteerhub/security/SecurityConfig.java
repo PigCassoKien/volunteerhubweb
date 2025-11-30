@@ -12,6 +12,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;             // ✅
+import org.springframework.web.cors.CorsConfigurationSource; // ✅
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource; // ✅
+
+import java.util.List; // ✅
 
 @Configuration
 @EnableWebSecurity
@@ -23,28 +28,43 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable()) // Tắt CSRF vì dùng JWT
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Không dùng session
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ✅ Bật cấu hình CORS
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/api/users/register",
                                 "/api/otp/verify",
                                 "/api/otp/generate",
                                 "/api/users/reset-password",
-                                "/api/dashboard/**"
-                        ).permitAll()                        // Role-based endpoints
+                                "/api/dashboard/**",
+                                "/api/events/all",
+                                "/api/events/get/**"
+                        ).permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/events/**").hasAnyRole("EVENT_MANAGER", "ADMIN")
                         .requestMatchers("/api/volunteer/**").hasRole("VOLUNTEER")
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        // Yêu cầu xác thực cho tất cả các request khác
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    // ✅ Thêm cấu hình CORS tại đây
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of("http://localhost:5173")); // Cho phép React truy cập
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true); // Nếu bạn gửi cookie/token qua header
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
     @Bean

@@ -8,6 +8,7 @@ import com.example.volunteerhub.entity.enums.EventStatus;
 import com.example.volunteerhub.entity.enums.UserRole;
 import com.example.volunteerhub.repository.EventRepository;
 import com.example.volunteerhub.repository.UserRepository;
+import jakarta.annotation.PostConstruct;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
