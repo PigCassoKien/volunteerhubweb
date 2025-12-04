@@ -10,16 +10,12 @@ export default function Register() {
     confirmPassword: "",
     phoneNumber: "",
     address: "",
+    role: "VOLUNTEER",
   });
   const [loading, setLoading] = useState(false);
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otp, setOtp] = useState("");
   const navigate = useNavigate();
-
-  // Scroll lên đầu khi vào trang
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -49,8 +45,9 @@ export default function Register() {
           password: formData.password,
           phoneNumber: formData.phoneNumber.trim(),
           address: formData.address.trim(),
-          role: "VOLUNTEER",
+          role: formData.role, // dùng giá trị user chọn
         }),
+
       });
 
       const text = await res.text();
@@ -95,25 +92,27 @@ export default function Register() {
       const text = await res.text();
       if (!res.ok) {
         let errorData = {};
-        try {
-          errorData = JSON.parse(text);
-        } catch { }
+        try { errorData = JSON.parse(text); } catch { }
         throw new Error(errorData.message || "Mã OTP không đúng");
       }
 
+      // Parse data trả về
       let data = {};
       if (text.trim()) {
-        try {
-          data = JSON.parse(text);
-        } catch { }
+        try { data = JSON.parse(text); } catch { }
       }
 
-      if (data.token) {
-        localStorage.setItem("token", data.token);
-      }
+      //Lưu token + user → AUTO LOGIN
+      if (data.token) localStorage.setItem("token", data.token);
+      if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
 
-      alert("Xác thực thành công! Chào mừng bạn đến với VolunteerHub 🎉");
-      setTimeout(() => navigate("/"), 500);
+      window.dispatchEvent(new Event("auth-changed"));
+
+      alert("Xác thực thành công! Tài khoản đã được tạo và đăng nhập 🎉");
+
+      // Chuyển trang
+      setTimeout(() => navigate("/"), 300);
+
     } catch (err) {
       alert(err.message || "Mã OTP sai hoặc đã hết hạn");
     }
@@ -156,6 +155,32 @@ export default function Register() {
           <InputField icon={<FiMapPin />} label="Địa chỉ" name="address" value={formData.address} onChange={handleChange} placeholder="Nhập địa chỉ" />
           <InputField icon={<FiLock />} label="Mật khẩu" name="password" type="password" value={formData.password} onChange={handleChange} placeholder="Nhập mật khẩu" />
           <InputField icon={<FiLock />} label="Xác nhận mật khẩu" name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleChange} placeholder="Nhập lại mật khẩu" />
+          <div>
+            <label className="block text-gray-600 text-sm mb-1">Vai trò</label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="role"
+                  value="VOLUNTEER"
+                  checked={formData.role === "VOLUNTEER"}
+                  onChange={handleChange}
+                />
+                <span>Tình nguyện viên</span>
+              </label>
+
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="role"
+                  value="EVENT_MANAGER"
+                  checked={formData.role === "EVENT_MANAGER"}
+                  onChange={handleChange}
+                />
+                <span>Quản lý sự kiện</span>
+              </label>
+            </div>
+          </div>
 
           <button
             type="submit"

@@ -38,14 +38,20 @@ public class SecurityConfig {
                                 "/api/otp/verify",
                                 "/api/otp/generate",
                                 "/api/users/reset-password",
-                                "/api/dashboard/**",
                                 "/api/events/all",
-                                "/api/events/get/**"
+                                "/api/events/get/**",
+                                "/api/users/**",
+                                "/api/registrations/count/**",
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
                         ).permitAll()
+
+                        .requestMatchers("/api/events/manage/**")
+                        .hasAnyRole("EVENT_MANAGER", "ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/events/**").hasAnyRole("EVENT_MANAGER", "ADMIN")
                         .requestMatchers("/api/volunteer/**").hasRole("VOLUNTEER")
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

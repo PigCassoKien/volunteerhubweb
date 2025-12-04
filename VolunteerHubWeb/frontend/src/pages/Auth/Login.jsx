@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react"; // Thêm useEffect
+import { useState, useEffect } from "react";
 import { FiMail, FiLock } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import { FaFacebook } from "react-icons/fa6";
@@ -9,11 +9,6 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-
-  // Scroll lên đầu khi load trang
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,8 +41,14 @@ export default function Login() {
       localStorage.setItem("token", data.token);
       if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
 
+      window.dispatchEvent(new Event("auth-changed"));
+
       alert("Đăng nhập thành công! Chào mừng trở lại ❤️");
-      setTimeout(() => navigate("/"), 300);
+
+      setTimeout(() => {
+        navigate("/");
+      }, 100);
+
     } catch (err) {
       alert(err.message || "Email hoặc mật khẩu không đúng");
     } finally {
@@ -92,7 +93,13 @@ export default function Login() {
           {loading ? "Đang đăng nhập..." : "Đăng nhập"}
         </button>
 
-        <p className="text-sm text-center text-gray-600 mt-2">
+        <p className="text-sm text-center mt-1">
+          <Link to="/forgot-password" className="text-green-600 hover:underline">
+            Quên mật khẩu?
+          </Link>
+        </p>
+
+        <p className="text-sm text-center text-gray-600 mt-1">
           Chưa có tài khoản?{" "}
           <Link
             to="/register"
@@ -110,11 +117,11 @@ export default function Login() {
         </div>
 
         <div className="flex justify-center gap-4">
-          <button className="flex items-center gap-2 border border-gray-300 rounded-lg px-8 py-2 hover:bg-gray-50 transition">
+          <button type="button" className="flex items-center gap-2 border border-gray-300 rounded-lg px-8 py-2 hover:bg-gray-50 transition">
             <FcGoogle className="text-2xl" />
             <span className="text-sm font-medium text-gray-600">Google</span>
           </button>
-          <button className="flex items-center gap-2 border border-gray-300 rounded-lg px-8 py-2 hover:bg-gray-50 transition">
+          <button type="button" className="flex items-center gap-2 border border-gray-300 rounded-lg px-8 py-2 hover:bg-gray-50 transition">
             <FaFacebook className="text-2xl text-blue-600" />
             <span className="text-sm font-medium text-gray-600">Facebook</span>
           </button>

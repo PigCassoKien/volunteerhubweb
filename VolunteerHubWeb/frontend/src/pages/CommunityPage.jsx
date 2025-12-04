@@ -2,33 +2,34 @@ import { FiHome, FiUsers, FiMapPin, FiHeart, FiClock, FiSearch } from "react-ico
 
 const CommunityPage = () => {
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-
+    <div className="min-h-screen bg-gray-50">
       {/* Banner */}
       <div
-        className="relative h-[330px] bg-cover bg-center"
+        className="relative h-[280px] bg-cover bg-center flex items-center justify-center text-center"
         style={{ backgroundImage: `url('/images/community-banner.jpg')` }}
       >
-        <div className="absolute inset-0 bg-black/40"></div>
+        <div className="absolute inset-0 bg-emerald-800/50"></div>
 
-        {/* Breadcrumb căn thẳng logo */}
-        <div className="absolute top-6 left-0 right-0 z-20">
-          <div className="max-w-7xl mx-auto px-6 text-white text-sm flex items-center gap-2">
-            <FiHome size={14} />
-            <span>Trang chủ</span>
-            <span className="opacity-70">/</span>
-            <span className="opacity-90">Cộng đồng</span>
+        <div className="absolute top-5 left-0 w-full z-20">
+          <div className="max-w-7xl mx-auto px-4">
+            <nav className="text-white/90 text-sm">
+              <ol className="flex items-center space-x-2">
+                <li>
+                  <a href="/" className="hover:text-white">Trang chủ</a>
+                </li>
+                <li>/</li>
+                <li className="font-semibold text-white">Cộng đồng</li>
+              </ol>
+            </nav>
           </div>
         </div>
 
         {/* Title */}
-        <div className="absolute bottom-8 left-0 right-0 z-20">
-          <div className="max-w-7xl mx-auto px-6 text-white">
-            <h1 className="text-4xl font-bold mb-2">Cộng đồng tình nguyện viên</h1>
-            <p className="text-lg opacity-90">
-              Kết nối với hàng nghìn tình nguyện viên nhiệt huyết trên khắp cả nước
-            </p>
-          </div>
+        <div className="relative z-10 text-white">
+          <h1 className="text-5xl font-bold">Cộng đồng tình nguyện viên</h1>
+          <p className="mt-3 text-lg">
+            Kết nối với hàng nghìn tình nguyện viên nhiệt huyết trên khắp cả nước
+          </p>
         </div>
       </div>
 

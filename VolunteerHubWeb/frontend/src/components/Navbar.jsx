@@ -1,17 +1,61 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
+import ContactModal from "../pages/ContactModal";
+import NotificationBell from "../components/NotificationBell";
 
 function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("user"));
-  const token = localStorage.getItem("token");
-
-  // Dropdown state
-  const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Click outside để đóng menu
+  // Load user
+  const [user, setUser] = useState(() => {
+    try {
+      const storedUser = localStorage.getItem("user");
+      if (!storedUser || storedUser === "undefined" || storedUser === "null") return null;
+      return JSON.parse(storedUser);
+    } catch {
+      return null;
+    }
+  });
+
+  const [token, setToken] = useState(() => {
+    const storedToken = localStorage.getItem("token");
+    return storedToken && storedToken !== "undefined" ? storedToken : null;
+  });
+
+  const updateAuthState = () => {
+    try {
+      const storedUser = localStorage.getItem("user");
+      const storedToken = localStorage.getItem("token");
+
+      if (!storedUser || storedUser === "undefined" || storedUser === "null") {
+        setUser(null);
+      } else {
+        setUser(JSON.parse(storedUser));
+      }
+
+      setToken(storedToken && storedToken !== "undefined" ? storedToken : null);
+    } catch {
+      setUser(null);
+      setToken(null);
+    }
+  };
+
+  // Lắng nghe sự kiện auth thay đổi
+  useEffect(() => {
+    window.addEventListener("auth-changed", updateAuthState);
+    return () => window.removeEventListener("auth-changed", updateAuthState);
+  }, []);
+
+  // Update theo route
+  useEffect(() => {
+    updateAuthState();
+  }, [location.pathname]);
+
+  // Dropdown user
+  const [open, setOpen] = useState(false);
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -22,18 +66,29 @@ function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Logout
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    setUser(null);
+    setToken(null);
+    window.dispatchEvent(new Event("auth-changed"));
     navigate("/login");
   };
+
+  // Modal liên hệ
+  const [openContact, setOpenContact] = useState(false);
 
   const menuItems = [
     { label: "Trang chủ", path: "/", icon: "fa-solid fa-house" },
     { label: "Sự kiện", path: "/events", icon: "fa-solid fa-calendar-check" },
     { label: "Cộng đồng", path: "/community", icon: "fa-solid fa-people-group" },
     { label: "Về chúng tôi", path: "/about", icon: "fa-solid fa-circle-info" },
-    { label: "Liên hệ", path: "/contact", icon: "fa-solid fa-phone" },
+    {
+      label: "Liên hệ",
+      action: () => setOpenContact(true),
+      icon: "fa-solid fa-phone",
+    },
   ];
 
   return (
@@ -54,90 +109,88 @@ function Navbar() {
         {/* Menu */}
         <ul className="hidden lg:flex items-center space-x-8 text-gray-700 font-medium">
           {menuItems.map((item) => (
-            <li key={item.path}>
-              <Link
-                to={item.path}
-                className={`flex items-center gap-2 hover:text-green-600 transition ${location.pathname === item.path
-                    ? "text-green-600 border-b-2 border-green-600 pb-1"
-                    : ""
-                  }`}
-              >
-                <i className={`${item.icon} text-green-500`}></i>
-                {item.label}
-              </Link>
+            <li key={item.label}>
+              {item.path ? (
+                <Link
+                  to={item.path}
+                  className={`flex items-center gap-2 hover:text-green-600 transition ${location.pathname === item.path
+                      ? "text-green-600 border-b-2 border-green-600 pb-1"
+                      : ""
+                    }`}
+                >
+                  <i className={`${item.icon} text-green-500`}></i>
+                  {item.label}
+                </Link>
+              ) : (
+                <button
+                  onClick={item.action}
+                  className="flex items-center gap-2 hover:text-green-600 transition"
+                >
+                  <i className={`${item.icon} text-green-500`}></i>
+                  {item.label}
+                </button>
+              )}
             </li>
           ))}
         </ul>
 
-        {/* Nếu đã đăng nhập → hiển thị avatar + dropdown */}
+        {/* USER AUTH + NOTIFICATION */}
         {token && user ? (
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setOpen(!open)}
-              className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition"
-            >
-              <div className="w-10 h-10 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xl">
-                <i className="fa-solid fa-user"></i>
-              </div>
+          <div className="flex items-center gap-4">
 
-              <div className="hidden md:block text-left">
-                <p className="font-semibold text-gray-800">{user.name}</p>
-                <p className="text-sm text-green-600">Tình nguyện viên</p>
-              </div>
+            {/* 🔔 NotificationBell */}
+            <NotificationBell />
 
-              <i className="fa-solid fa-chevron-down text-gray-500"></i>
-            </button>
-
-            {/* Dropdown */}
-            {open && (
-              <div className="absolute right-0 mt-2 w-60 bg-white shadow-lg rounded-xl p-4 border animate-fadeIn">
-                <div className="pb-3 border-b">
-                  <p className="font-semibold">{user.name}</p>
-                  <p className="text-sm text-green-600">Tình nguyện viên</p>
+            {/* Avatar + dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setOpen(!open)}
+                className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition"
+              >
+                <div className="w-10 h-10 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xl">
+                  <i className="fa-solid fa-user"></i>
                 </div>
 
-                <ul className="mt-3 space-y-3 text-gray-700">
-                  <li>
-                    <Link
-                      to="/profile"
-                      className="flex items-center gap-2 hover:text-green-600 transition"
-                    >
-                      <i className="fa-solid fa-user"></i> Hồ sơ cá nhân
-                    </Link>
-                  </li>
+                <div className="hidden md:block text-left">
+                  <p className="font-semibold text-gray-800">{user.fullName}</p>
+                  <p className="text-xs text-green-600">Tình nguyện viên</p>
+                </div>
 
-                  <li>
-                    <Link
-                      to="/saved-events"
-                      className="flex items-center gap-2 hover:text-green-600 transition"
-                    >
-                      <i className="fa-solid fa-bookmark"></i> Sự kiện đã lưu
-                    </Link>
-                  </li>
+                <i className="fa-solid fa-chevron-down text-gray-500"></i>
+              </button>
 
-                  <li>
-                    <Link
-                      to="/settings"
-                      className="flex items-center gap-2 hover:text-green-600 transition"
-                    >
-                      <i className="fa-solid fa-gear"></i> Cài đặt
-                    </Link>
-                  </li>
+              {open && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border p-4 z-50">
+                  <div className="pb-3 border-b">
+                    <p className="font-semibold">{user.fullName}</p>
+                    <p className="text-sm text-green-600">Tình nguyện viên</p>
+                  </div>
 
-                  <li>
-                    <button
-                      onClick={handleLogout}
-                      className="flex items-center gap-2 text-red-600 font-medium w-full hover:text-red-700 transition"
-                    >
-                      <i className="fa-solid fa-right-from-bracket"></i> Đăng xuất
-                    </button>
-                  </li>
-                </ul>
-              </div>
-            )}
+                  <ul className="mt-3 space-y-3 text-gray-700">
+                    <li>
+                      <Link to="/profile" className="flex items-center gap-2 hover:text-green-600">
+                        <i className="fa-solid fa-user text-green-600"></i> Hồ sơ cá nhân
+                      </Link>
+                    </li>
+                    <li>
+                      <Link to="/saved-events" className="flex items-center gap-2 hover:text-green-600">
+                        <i className="fa-solid fa-bookmark text-green-600"></i> Sự kiện đã lưu
+                      </Link>
+                    </li>
+                    <li>
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center gap-2 text-red-600 font-medium w-full hover:text-red-700"
+                      >
+                        <i className="fa-solid fa-right-from-bracket"></i> Đăng xuất
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
-          /* Nút đăng nhập / đăng ký */
           <div className="hidden md:flex items-center space-x-3">
             <Link
               to="/login"
@@ -154,13 +207,16 @@ function Navbar() {
           </div>
         )}
 
-        {/* Mobile */}
+        {/* Mobile menu button */}
         <div className="lg:hidden block">
           <button className="text-green-700 text-2xl">
             <i className="fa-solid fa-bars"></i>
           </button>
         </div>
       </nav>
+
+      {/* Modal Liên hệ */}
+      <ContactModal open={openContact} onClose={() => setOpenContact(false)} />
     </header>
   );
 }
