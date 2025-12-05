@@ -9,12 +9,18 @@ import Register from "./pages/Auth/Register";
 import Profile from "./pages/User/Profile";
 import EventDetail from "./pages/Event/EventDetail";
 import CommunityPage from "./pages/CommunityPage";
+import AboutPage from "./pages/AboutPage";
+import ScrollToTop from "./components/ScrollToTop";
+import ForgotPassword from "./pages/Auth/ForgotPassword";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 function App() {
   return (
     <Router>
+      {/* Scroll to top */}
+      <ScrollToTop />
+
       <ToastContainer
         position="top-right"
         autoClose={4000}
@@ -27,6 +33,7 @@ function App() {
         pauseOnHover
         theme="light"
       />
+
       <div className="flex flex-col min-h-screen">
         <Navbar />
         <main className="flex-grow">
@@ -38,6 +45,8 @@ function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/events/:id" element={<EventDetail />} />
             <Route path="/community" element={<CommunityPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
           </Routes>
         </main>
         <Footer />

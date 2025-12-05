@@ -1,5 +1,6 @@
 package com.example.volunteerhub.config;
 
+import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -9,7 +10,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.HashMap;
 import java.util.Map;
 
-@RestControllerAdvice
+@RestControllerAdvice(basePackages = "com.example.volunteerhub")
+@Hidden
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(RuntimeException.class)
@@ -31,7 +33,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleOther(Exception ex) {
         Map<String, Object> body = new HashMap<>();
-        body.put("message", "Internal server error");
+        body.put("message", "Lỗi máy chủ nội bộ");
         body.put("error", ex.getMessage());
         body.put("status", 500);
         return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);

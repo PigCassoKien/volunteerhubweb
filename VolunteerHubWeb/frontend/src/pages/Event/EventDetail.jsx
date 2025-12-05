@@ -3,12 +3,111 @@ import { useParams, Link } from "react-router-dom";
 import axios from "axios";
 import { FiMapPin, FiCalendar, FiUsers, FiArrowLeft, FiClock } from "react-icons/fi";
 import { FaStar } from "react-icons/fa";
+import RegistrationForm from "./RegistrationForm";
 
 const EventDetail = () => {
   const { id } = useParams(); // lấy id từ URL
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0 });
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [registrationStatus, setRegistrationStatus] = useState(null);
+  const [registrationId, setRegistrationId] = useState(null);
+  const [tab, setTab] = useState("overview");
+
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const checkRegistration = async () => {
+      try {
+        const res = await axios.post(
+          "/api/registrations/history",
+          {
+            startDate: "2000-01-01",
+            endDate: "2100-01-01",
+            status: null,
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        const exists = res.data.find(r => r.eventId == id);
+
+        if (exists) {
+          setRegistrationStatus(exists.status);
+          setRegistrationId(exists.id);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    checkRegistration();
+  }, [id]);
+
+  const handleCancelRegistration = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const res = await axios.put(
+        `/api/registrations/cancel/${registrationId}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      alert("Đã hủy đăng ký!");
+      setRegistrationStatus("CANCELLED");
+    } catch (err) {
+      alert("Không thể hủy.");
+    }
+  };
+
+  const [formData, setFormData] = useState({
+    fullName: "",
+    gender: "",
+    dateOfBirth: "",
+    address: "",
+    occupation: "",
+    about: "",
+    phone: "",
+    email: "",
+    school: "",
+    experience: "",
+    skills: "",
+    confirmation: false,
+  });
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) setIsLoggedIn(true);
+  }, []);
+
+  const handleRegister = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Bạn phải đăng nhập trước!");
+      return;
+    }
+
+    try {
+      const res = await axios.post(
+        `/api/registrations/register/${id}`,
+        formData,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      alert("Đăng ký thành công!");
+
+      setRegistrationStatus("APPROVED");
+      setShowForm(false);
+
+    } catch (error) {
+      alert(error.response?.data?.message || "Đăng ký thất bại!");
+    }
+  };
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -37,7 +136,7 @@ const EventDetail = () => {
         }
       };
       calculateTimeLeft();
-      const interval = setInterval(calculateTimeLeft, 60000); // Update every minute
+      const interval = setInterval(calculateTimeLeft, 60000);
       return () => clearInterval(interval);
     }
   }, [event]);
@@ -58,18 +157,18 @@ const EventDetail = () => {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* Banner */}
-      <div className="relative h-[320px] bg-cover bg-center" style={{ backgroundImage: `url(${event.imageFile || '/images/default-event.jpg'})` }}>
-        <div className="absolute inset-0 bg-black/50"></div>
+      <div className="relative h-[280px] bg-cover bg-center flex items-center justify-center text-center" style={{ backgroundImage: `url(${event.imageFile || '/images/default-event.jpg'})` }}>
+        <div className="absolute inset-0 bg-emerald-800/50"></div>
         <div className="absolute top-6 left-0 right-0 z-20">
           <div className="max-w-7xl mx-auto px-4 text-white text-sm flex gap-2">
             <Link to="/events" className="hover:underline">Sự kiện</Link>
             <span>/</span>
-            <span className="text-gray-300">{event.title}</span>
+            <span className="font-semibold text-white">{event.title}</span>
           </div>
         </div>
 
-        <div className="absolute bottom-8 left-8 text-white z-10">
-          <h1 className="text-4xl font-bold mb-2 text-orange-500">{event.title}</h1> {/* Màu cam cho tiêu đề */}
+        <div className="relative z-10 text-white">
+          <h1 className="text-5xl font-bold">{event.title}</h1>
           <p className="text-gray-200 text-lg">{event.category?.name || "Khác"}</p>
         </div>
       </div>
@@ -89,7 +188,7 @@ const EventDetail = () => {
       </div>
 
       {/* Nội dung chi tiết */}
-      <div className="max-w-5xl mx-auto bg-white rounded-xl shadow-lg -mt-12 pt-20 p-8 relative z-20"> {/* Điều chỉnh padding để bubble không chồng */}
+      <div className="max-w-5xl mx-auto bg-white rounded-xl shadow-lg -mt-12 pt-10 p-8 relative z-20"> {/* Điều chỉnh padding để bubble không chồng */}
         <Link
           to="/events"
           className="inline-flex items-center text-emerald-600 mb-4 hover:underline"
@@ -98,15 +197,56 @@ const EventDetail = () => {
         </Link>
 
         {/* Tab menu */}
-        <ul className="flex border-b mb-6">
-          <li className="mr-6"><a href="#" className="text-gray-500 hover:text-emerald-600">Tổng quan</a></li>
-          <li className="mr-6"><a href="#" className="text-emerald-600 border-b-2 border-emerald-600 pb-2">Chi tiết</a></li>
-          <li className="mr-6"><a href="#" className="text-gray-500 hover:text-emerald-600">Hình ảnh</a></li>
-          <li className="mr-6"><a href="#" className="text-gray-500 hover:text-emerald-600">Đánh giá</a></li>
-          <li className="mr-6"><a href="#" className="text-gray-500 hover:text-emerald-600">Tham gia cùng tôi để thay đổi tích cực</a></li>
-        </ul>
+        <nav className="flex gap-8 text-sm">
 
-        <h2 className="text-2xl font-semibold text-gray-800 mb-4">Chi tiết sự kiện</h2>
+          <button
+            onClick={() => setTab("overview")}
+            className={`pb-3 font-medium ${tab === "overview" ? "border-b-2 border-emerald-600 text-emerald-600" : "text-gray-500"}`}
+          >
+            Tổng quan
+          </button>
+
+          <button
+            onClick={() => setTab("detail")}
+            className={`pb-3 ${tab === "detail" ? "border-b-2 border-emerald-600 text-emerald-600" : "text-gray-500"}`}
+          >
+            Chi tiết
+          </button>
+
+          <button
+            onClick={() => setTab("images")}
+            className={`pb-3 ${tab === "images" ? "border-b-2 border-emerald-600 text-emerald-600" : "text-gray-500"}`}
+          >
+            Hình ảnh
+          </button>
+
+          <button
+            onClick={() => setTab("discussion")}
+            className={`pb-3 ${tab === "discussion" ? "border-b-2 border-emerald-600 text-emerald-600" : "text-gray-500"}`}
+          >
+            Trao đổi
+          </button>
+
+        </nav>
+
+        {tab === "overview" && (
+          <>
+            {/* Toàn bộ code giao diện chi tiết hiện tại của bạn */}
+          </>
+        )}
+
+        {tab === "detail" && (
+          <p className="text-gray-600">Hiển thị nội dung chi tiết khác…</p>
+        )}
+
+        {tab === "images" && (
+          <p className="text-gray-600">Hiển thị album ảnh…</p>
+        )}
+
+        {tab === "discussion" && (
+          <EventChannel eventId={event.id} />
+        )}
+
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Thông tin chính */}
@@ -151,9 +291,26 @@ const EventDetail = () => {
               Bằng cách tham gia sự kiện này bạn đang tạo ra sự thay đổi tích cực
             </p>
 
-            <button className="w-full bg-emerald-600 text-white py-3 rounded-lg mt-4 hover:bg-emerald-700 transition">
-              Đăng ký tham gia
-            </button>
+            {isLoggedIn && (
+              <>
+                {registrationStatus === "APPROVED" ? (
+                  <button
+                    onClick={handleCancelRegistration}
+                    className="w-full bg-red-600 text-white py-3 rounded-lg mt-4 hover:bg-red-700 transition"
+                  >
+                    Hủy đăng ký
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowForm(true)}
+                    className="w-full bg-emerald-600 text-white py-3 rounded-lg mt-4 hover:bg-emerald-700 transition"
+                  >
+                    Đăng ký tham gia
+                  </button>
+                )}
+              </>
+            )}
+
             <button className="w-full border border-emerald-600 text-emerald-600 py-3 rounded-lg mt-3 hover:bg-emerald-50 transition">
               ❤️ Thêm vào yêu thích
             </button>
@@ -185,10 +342,23 @@ const EventDetail = () => {
         </div>
 
         {/* Nút đăng nhập ngay */}
-        <button className="w-full bg-emerald-600 text-white py-3 rounded-lg mt-6 hover:bg-emerald-700 transition">
-          Đăng nhập ngay
-        </button>
+        {!isLoggedIn && (
+          <Link
+            to="/login"
+            className="block w-full text-center bg-emerald-600 text-white py-3 rounded-lg mt-6 hover:bg-emerald-700 transition"
+          >
+            Đăng nhập ngay
+          </Link>
+        )}
       </div>
+      {showForm && (
+        <RegistrationForm
+          formData={formData}
+          setFormData={setFormData}
+          onClose={() => setShowForm(false)}
+          onSubmit={handleRegister}
+        />
+      )}
     </div>
   );
 };

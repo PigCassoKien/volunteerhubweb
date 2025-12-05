@@ -36,7 +36,7 @@ const EventList = () => {
       {/* Banner */}
       <div
         className="relative h-[280px] bg-cover bg-center flex items-center justify-center text-center"
-        style={{ backgroundImage: "url('/images/banner-events.jpg')" }}
+        style={{ backgroundImage: "url('src\assets\Team planting trees together for a green initiative.jpg')" }}
       >
         <div className="absolute inset-0 bg-emerald-800/50"></div>
 

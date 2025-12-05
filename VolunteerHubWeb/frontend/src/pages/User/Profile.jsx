@@ -1,232 +1,202 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { FiEdit, FiUser, FiMail, FiPhone, FiMapPin, FiLock } from "react-icons/fi";
+import {
+  FiUser,
+  FiMail,
+  FiPhone,
+  FiMapPin,
+  FiEdit3,
+  FiCamera,
+} from "react-icons/fi";
 
-const Profile = () => {
+import TabInfo from "./TabInfo";
+import TabActivity from "./TabActivity";
+// import TabAchievement from "./TabAchievement";
+import TabSettings from "./TabSettings";
+
+export default function Profile() {
   const [user, setUser] = useState(null);
-  const [editMode, setEditMode] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const [activeTab, setActiveTab] = useState("info");
+
+  const fileInputRef = useRef();
+
   const token = localStorage.getItem("token");
+  const storedUser = JSON.parse(localStorage.getItem("user"));
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await axios.get("http://localhost:8080/api/users/get/1", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    if (!token || !storedUser) return;
+
+    axios
+      .get(`/api/users/get/${storedUser.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => {
         setUser(res.data);
-        setForm(res.data);
-      } catch (err) {
-        console.error("Lỗi tải thông tin người dùng:", err);
-      } finally {
         setLoading(false);
-      }
-    };
-    fetchUser();
+      })
+      .catch(() => setLoading(false));
   }, []);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  // UPLOAD AVATAR
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-  const handleSave = async () => {
+    const formData = new FormData();
+    formData.append("avatar", file);
+
     try {
-      await axios.put(
-        `http://localhost:8080/api/users/update/${user.id}`,
-        form,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const res = await axios.post(
+        `/api/users/upload-avatar/${storedUser.id}`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
       );
-      setUser(form);
-      setEditMode(false);
-      alert("Cập nhật thông tin thành công!");
+
+      setUser({ ...user, avatarFile: res.data.fileName });
+      alert("Cập nhật ảnh đại diện thành công!");
     } catch (err) {
-      console.error("Lỗi khi cập nhật:", err);
-      alert("Không thể cập nhật thông tin.");
+      alert("Tải ảnh thất bại!");
     }
   };
 
-  if (loading) return <p className="text-center mt-10">Đang tải thông tin...</p>;
+  if (loading)
+    return <div className="text-center p-10 text-xl">Đang tải thông tin...</div>;
+
+  if (!user)
+    return (
+      <div className="text-center p-10 text-xl text-red-600">
+        Không thể tải thông tin người dùng.
+      </div>
+    );
+
+  const avatarUrl = user.avatarFile
+    ? `/uploads/${user.avatarFile}`
+    : "https://i.pravatar.cc/200";
 
   return (
-    <div className="max-w-3xl mx-auto py-12 px-6">
-      <div className="bg-white shadow-lg rounded-xl p-8">
-        <div className="flex items-center gap-6">
-          <div className="relative group">
-            <img
-              src={user.avatarFile || "/images/default-avatar.png"}
-              alt="Avatar"
-              className="w-32 h-32 rounded-full object-cover border-4 border-emerald-500"
-            />
+    <div className="bg-[#F0FDF4] min-h-screen p-5">
 
-            <label
-              htmlFor="avatar-upload"
-              className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 text-white text-sm rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition"
-            >
-              Đổi ảnh
-            </label>
-
-            <input
-              id="avatar-upload"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const formData = new FormData();
-                formData.append("file", file);
-                try {
-                  const res = await axios.post(
-                    `http://localhost:8443/api/users/upload-avatar/${user.id}`,
-                    formData,
-                    {
-                      headers: {
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "multipart/form-data",
-                      },
-                    }
-                  );
-                  setUser({ ...user, avatarFile: res.data });
-                  alert("Cập nhật ảnh thành công!");
-                } catch (err) {
-                  console.error("Lỗi upload ảnh:", err);
-                  alert("Không thể upload ảnh.");
-                }
-              }}
-            />
-          </div>
-          <div>
-            <h2 className="text-3xl font-bold text-gray-800">{user.fullName}</h2>
-            <p className="text-gray-500">{user.role}</p>
-          </div>
-          <button
-            onClick={() => setEditMode(!editMode)}
-            className="ml-auto px-4 py-2 flex items-center gap-2 border border-emerald-600 text-emerald-600 rounded-full hover:bg-emerald-50 transition"
-          >
-            <FiEdit /> {editMode ? "Huỷ" : "Chỉnh sửa"}
-          </button>
+      {/* Breadcrumb */}
+      <div className="w-full mb-6">
+        <div className="max-w-7xl mx-auto px-4">
+          <nav className="text-gray-600 text-sm">
+            <ol className="flex items-center space-x-2">
+              <li>
+                <a href="/" className="hover:text-gray-800">Trang chủ</a>
+              </li>
+              <li className="text-gray-400">/</li>
+              <li className="font-semibold text-gray-800">Thông tin cá nhân</li>
+            </ol>
+          </nav>
         </div>
+      </div>
 
-        <div className="mt-8 space-y-4">
-          <div className="flex items-center gap-3">
-            <FiMail className="text-emerald-600" />
-            <input
-              name="email"
-              disabled
-              value={form.email}
-              className="flex-1 border-none bg-transparent text-gray-600"
-            />
-          </div>
+      {/* GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-h-[560px]">
 
-          <div className="flex items-center gap-3">
-            <FiUser className="text-emerald-600" />
-            <input
-              name="fullName"
-              disabled={!editMode}
-              value={form.fullName}
-              onChange={handleChange}
-              className={`flex-1 p-2 rounded-md ${
-                editMode ? "border border-gray-300" : "border-none bg-transparent text-gray-600"
-              }`}
-            />
-          </div>
+        {/* LEFT CARD */}
+        <div className="bg-white rounded-2xl shadow p-8 h-full">
+          <div className="flex flex-col items-center text-center">
+            <div className="relative">
+              <img
+                src={avatarUrl}
+                className="w-32 h-32 object-cover rounded-full"
+              />
 
-          <div className="flex items-center gap-3">
-            <FiPhone className="text-emerald-600" />
-            <input
-              name="phoneNumber"
-              disabled={!editMode}
-              value={form.phoneNumber}
-              onChange={handleChange}
-              className={`flex-1 p-2 rounded-md ${
-                editMode ? "border border-gray-300" : "border-none bg-transparent text-gray-600"
-              }`}
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <FiMapPin className="text-emerald-600" />
-            <input
-              name="address"
-              disabled={!editMode}
-              value={form.address}
-              onChange={handleChange}
-              className={`flex-1 p-2 rounded-md ${
-                editMode ? "border border-gray-300" : "border-none bg-transparent text-gray-600"
-              }`}
-            />
-          </div>
-
-          {editMode && (
-            <div className="pt-4">
               <button
-                onClick={handleSave}
-                className="bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 transition"
+                onClick={() => fileInputRef.current.click()}
+                className="absolute bottom-0 right-0 bg-white p-2 rounded-full shadow"
               >
-                Lưu thay đổi
+                <FiCamera className="text-gray-600" />
               </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+              />
             </div>
-          )}
+
+            <h2 className="text-xl font-bold mt-4">{user.fullName}</h2>
+
+            <span className="bg-[#D1FADF] text-[#027A48] px-4 py-1 rounded-full mt-2 text-sm">
+              {user.role === "ADMIN" ? "Quản trị viên" : "Tình nguyện viên"}
+            </span>
+
+            <p className="text-gray-600 mt-4 px-2">
+              {user.publicProfile ||
+                "Tôi là một tình nguyện viên nhiệt huyết, luôn mong muốn đóng góp cho cộng đồng."}
+            </p>
+
+            <div className="mt-6 space-y-2 text-gray-700 text-sm">
+              <p className="flex items-center gap-2">
+                <FiMail /> {user.email}
+              </p>
+              <p className="flex items-center gap-2">
+                <FiPhone /> {user.phoneNumber || "Chưa cập nhật"}
+              </p>
+              <p className="flex items-center gap-2">
+                <FiMapPin /> {user.address || "Chưa cập nhật"}
+              </p>
+            </div>
+
+            <p className="text-gray-500 text-sm mt-4">
+              Tham gia từ:{" "}
+              {user.createdAt
+                ? new Date(user.createdAt).toLocaleDateString("vi-VN")
+                : "Không rõ"}
+            </p>
+          </div>
+        </div>
+
+        {/* RIGHT SIDE */}
+        <div className="lg:col-span-2 flex flex-col gap-6 h-full">
+
+          {/* TABS */}
+          <div className="bg-white rounded-xl shadow flex p-3 gap-2 w-full">
+            {[
+              { key: "info", label: "Thông tin" },
+              { key: "activity", label: "Hoạt động" },
+              { key: "achievement", label: "Thành tích" },
+              { key: "settings", label: "Cài đặt" },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex-1 px-6 py-2 rounded-lg font-semibold text-center transition
+                  ${activeTab === tab.key
+                    ? "bg-[#06C270] text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                  }
+                `}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* CONTENT */}
+          <div className="bg-white rounded-2xl shadow p-8 h-full">
+            {activeTab === "info" && (
+              <TabInfo user={user} setUser={setUser} saving={saving} setSaving={setSaving} />
+            )}
+            {activeTab === "activity" && <TabActivity user={user} />}
+            {activeTab === "achievement" && <TabAchievement user={user} />}
+            {activeTab === "settings" && <TabSettings user={user} />}
+          </div>
+
         </div>
       </div>
-
-      <div className="mt-8 bg-white shadow-lg rounded-xl p-8">
-        <h3 className="text-xl font-semibold flex items-center gap-2 mb-4">
-          <FiLock className="text-emerald-600" /> Đổi mật khẩu
-        </h3>
-        <ChangePasswordForm />
-      </div>
     </div>
   );
-};
-
-//đổi mật khẩu
-const ChangePasswordForm = () => {
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const token = localStorage.getItem("token");
-
-  const handleChangePassword = async () => {
-    try {
-      await axios.put(
-        "http://localhost:8080/api/users/change-password",
-        { oldPassword, newPassword },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      alert("Đổi mật khẩu thành công!");
-      setOldPassword("");
-      setNewPassword("");
-    } catch (err) {
-      console.error("Lỗi khi đổi mật khẩu:", err);
-      alert("Không thể đổi mật khẩu.");
-    }
-  };
-
-  return (
-    <div className="space-y-3">
-      <input
-        type="password"
-        placeholder="Mật khẩu cũ"
-        value={oldPassword}
-        onChange={(e) => setOldPassword(e.target.value)}
-        className="w-full border border-gray-300 rounded-md p-2"
-      />
-      <input
-        type="password"
-        placeholder="Mật khẩu mới"
-        value={newPassword}
-        onChange={(e) => setNewPassword(e.target.value)}
-        className="w-full border border-gray-300 rounded-md p-2"
-      />
-      <button
-        onClick={handleChangePassword}
-        className="bg-emerald-600 text-white px-5 py-2 rounded-lg hover:bg-emerald-700 transition"
-      >
-        Cập nhật mật khẩu
-      </button>
-    </div>
-  );
-};
-
-export default Profile;
+}
