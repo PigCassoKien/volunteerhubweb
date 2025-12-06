@@ -52,56 +52,87 @@ public class ReactionService {
         return registrationService.hasApproveRegistration(eventId, user.getId());
     }
 
-    // Create
+    // Create or toggle/update reaction: ensure one reaction per user per target
     public ReactionDTO addReaction(ReactionDTO reactionDTO, String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (reactionDTO.getPostId() == null && reactionDTO.getCommentId() == null) {
-            throw new RuntimeException("postId or commentId is required");
-        }
-
-        Reaction reaction = new Reaction();
-        reaction.setUser(user);
-        reaction.setReactionType(reactionDTO.getReactionType());
-        reaction.setCreatedAt(LocalDateTime.now());
-
+        // permission: must be participant or manager for the event
+        Long targetEventId = null;
         if (reactionDTO.getPostId() != null) {
             Post post = postRepository.findById(reactionDTO.getPostId())
                     .orElseThrow(() -> new RuntimeException("Post not found"));
-            Long eventId = post.getEvent().getId();
-
-            boolean isManager = post.getEvent().getCreatedBy() != null
-                    && post.getEvent().getCreatedBy().getId().equals(user.getId());
-            boolean isParticipant = registrationService.hasApproveRegistration(eventId, user.getId());
-
-            if (!isManager && !isParticipant) {
-                throw new RuntimeException("Unauthorized to react to this post");
-            }
-            reaction.setPost(post);
-            reaction = reactionRepository.save(reaction);
-
-            notificationService.notifyReaction(post.getUser().getId(), post.getId(), RelatedType.POST, reaction.getReactionType());
-        } else {
+            targetEventId = post.getEvent().getId();
+        } else if (reactionDTO.getCommentId() != null) {
             Comment comment = commentRepository.findById(reactionDTO.getCommentId())
                     .orElseThrow(() -> new RuntimeException("Comment not found"));
-            Post post = comment.getPost();
-            Long eventId = post.getEvent().getId();
-
-            boolean isManager = post.getEvent().getCreatedBy() != null
-                    && post.getEvent().getCreatedBy().getId().equals(user.getId());
-            boolean isParticipant = registrationService.hasApproveRegistration(eventId, user.getId());
-
-            if (!isManager && !isParticipant) {
-                throw new RuntimeException("Unauthorized to react to this comment");
-            }
-            reaction.setComment(comment);
-            reaction = reactionRepository.save(reaction);
-
-            notificationService.notifyReaction(comment.getUser().getId(), comment.getId(), RelatedType.COMMENT, reaction.getReactionType());
+            targetEventId = comment.getPost().getEvent().getId();
+        } else {
+            throw new RuntimeException("Invalid reaction target");
         }
 
-        return modelMapper.map(reaction, ReactionDTO.class);
+        if (!isEventManagerOrApprovedParticipant(targetEventId, user)) {
+            throw new RuntimeException("Unauthorized to react");
+        }
+
+        // handle post reaction
+        if (reactionDTO.getPostId() != null) {
+            Long postId = reactionDTO.getPostId();
+            Reaction existing = reactionRepository.findByPostIdAndUserId(postId, user.getId()).orElse(null);
+
+            if (existing != null) {
+                // same type => toggle off (delete)
+                if (existing.getReactionType() == reactionDTO.getReactionType()) {
+                    reactionRepository.delete(existing);
+                    return null;
+                }
+                // different type => update
+                existing.setReactionType(reactionDTO.getReactionType());
+                existing.setUpdatedAt(LocalDateTime.now());
+                existing = reactionRepository.save(existing);
+                return modelMapper.map(existing, ReactionDTO.class);
+            } else {
+                Reaction r = new Reaction();
+                r.setUser(user);
+                Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Post not found"));
+                r.setPost(post);
+                r.setReactionType(reactionDTO.getReactionType());
+                r.setCreatedAt(LocalDateTime.now());
+                r = reactionRepository.save(r);
+                // notify post owner (optional)
+                notificationService.notifyReaction(post.getUser().getId(), post.getId(), RelatedType.POST, r.getReactionType());
+                return modelMapper.map(r, ReactionDTO.class);
+            }
+        }
+
+        // handle comment reaction
+        if (reactionDTO.getCommentId() != null) {
+            Long commentId = reactionDTO.getCommentId();
+            Reaction existing = reactionRepository.findByCommentIdAndUserId(commentId, user.getId()).orElse(null);
+
+            if (existing != null) {
+                if (existing.getReactionType() == reactionDTO.getReactionType()) {
+                    reactionRepository.delete(existing);
+                    return null;
+                }
+                existing.setReactionType(reactionDTO.getReactionType());
+                existing.setUpdatedAt(LocalDateTime.now());
+                existing = reactionRepository.save(existing);
+                return modelMapper.map(existing, ReactionDTO.class);
+            } else {
+                Reaction r = new Reaction();
+                r.setUser(user);
+                Comment comment = commentRepository.findById(commentId).orElseThrow(() -> new RuntimeException("Comment not found"));
+                r.setComment(comment);
+                r.setReactionType(reactionDTO.getReactionType());
+                r.setCreatedAt(LocalDateTime.now());
+                r = reactionRepository.save(r);
+                notificationService.notifyReaction(comment.getUser().getId(), comment.getId(), RelatedType.COMMENT, r.getReactionType());
+                return modelMapper.map(r, ReactionDTO.class);
+            }
+        }
+
+        throw new RuntimeException("Invalid reaction target");
     }
 
     // Read

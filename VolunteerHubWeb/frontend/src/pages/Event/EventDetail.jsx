@@ -1,70 +1,37 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import axios from "axios";
-import { FiMapPin, FiCalendar, FiUsers, FiArrowLeft, FiClock } from "react-icons/fi";
-import { FaStar } from "react-icons/fa";
+import { useParams } from "react-router-dom";
+import axios from "../../api/axios";
+import EventChannel from "./EventChannel";
 import RegistrationForm from "./RegistrationForm";
+import EventMyPosts from "./EventMyPosts"; // new
+import { getFileUrl } from "../../utils/files";
 
-const EventDetail = () => {
-  const { id } = useParams(); // lấy id từ URL
+const Badge = ({ children, className = "" }) => (
+  <span className={`px-3 py-1 rounded-full text-xs font-medium ${className}`}>{children}</span>
+);
+
+const StatItem = ({ label, value, icon }) => (
+  <div className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 shadow-sm">
+    <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">{icon}</div>
+    <div>
+      <div className="text-sm text-gray-500">{label}</div>
+      <div className="font-semibold text-gray-800">{value}</div>
+    </div>
+  </div>
+);
+
+export default function EventDetail() {
+  const { id } = useParams();
+  // khai báo storedUser để dùng trong component
+  const storedUser = JSON.parse(localStorage.getItem("user") || "null");
+
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0 });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [registrationStatus, setRegistrationStatus] = useState(null);
   const [registrationId, setRegistrationId] = useState(null);
-  const [tab, setTab] = useState("overview");
-
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const checkRegistration = async () => {
-      try {
-        const res = await axios.post(
-          "/api/registrations/history",
-          {
-            startDate: "2000-01-01",
-            endDate: "2100-01-01",
-            status: null,
-          },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        const exists = res.data.find(r => r.eventId == id);
-
-        if (exists) {
-          setRegistrationStatus(exists.status);
-          setRegistrationId(exists.id);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    checkRegistration();
-  }, [id]);
-
-  const handleCancelRegistration = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    try {
-      const res = await axios.put(
-        `/api/registrations/cancel/${registrationId}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      alert("Đã hủy đăng ký!");
-      setRegistrationStatus("CANCELLED");
-    } catch (err) {
-      alert("Không thể hủy.");
-    }
-  };
-
+  const [approvedCount, setApprovedCount] = useState(0);
   const [formData, setFormData] = useState({
     fullName: "",
     gender: "",
@@ -79,288 +46,455 @@ const EventDetail = () => {
     skills: "",
     confirmation: false,
   });
+  const [activeTab, setActiveTab] = useState("info");
 
+  // Load event
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) setIsLoggedIn(true);
-  }, []);
-
-  const handleRegister = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("Bạn phải đăng nhập trước!");
-      return;
-    }
-
-    try {
-      const res = await axios.post(
-        `/api/registrations/register/${id}`,
-        formData,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      alert("Đăng ký thành công!");
-
-      setRegistrationStatus("APPROVED");
-      setShowForm(false);
-
-    } catch (error) {
-      alert(error.response?.data?.message || "Đăng ký thất bại!");
-    }
-  };
-
-  useEffect(() => {
-    const fetchEvent = async () => {
+    const loadEvent = async () => {
       try {
-        const res = await axios.get(`/api/events/get/${id}`);
+        const res = await axios.get(`/events/get/${id}`);
         setEvent(res.data);
-      } catch (err) {
-        console.error("Lỗi tải chi tiết sự kiện:", err);
+      } catch (e) {
+        console.error("Lỗi tải sự kiện:", e);
       } finally {
         setLoading(false);
       }
     };
-    fetchEvent();
+    if (id) loadEvent();
   }, [id]);
 
+  // Check my registration for this event
   useEffect(() => {
-    if (event) {
-      const calculateTimeLeft = () => {
-        const difference = new Date(event.startDate) - new Date();
-        if (difference > 0) {
-          const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-          const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-          setTimeLeft({ days, hours });
+    const token = localStorage.getItem("token");
+    setIsLoggedIn(!!token);
+    if (!token || !id) return;
+
+    const fetchHistory = async () => {
+      try {
+        const res = await axios.post("/registrations/history", {
+          startDate: "2000-01-01T00:00:00",
+          endDate: "2100-01-01T00:00:00",
+          status: null,
+          categoryId: null,
+          sortBy: "dateDesc",
+        });
+        const regsForEvent = (res.data || []).filter(r => r.eventId === Number(id));
+        if (regsForEvent.length) {
+          const priority = { APPROVED: 3, PENDING: 2, COMPLETED: 1, CANCELED: 0, REJECTED: 0 };
+          regsForEvent.sort((a, b) =>
+            (priority[b.status] - priority[a.status]) ||
+            (new Date(b.registeredAt) - new Date(a.registeredAt))
+          );
+          setRegistrationStatus(regsForEvent[0].status);
+          setRegistrationId(regsForEvent[0].id);
         } else {
-          setTimeLeft({ days: 0, hours: 0 });
+          setRegistrationStatus(null);
+          setRegistrationId(null);
         }
-      };
-      calculateTimeLeft();
-      const interval = setInterval(calculateTimeLeft, 60000);
-      return () => clearInterval(interval);
+      } catch (err) {
+        console.error("Lỗi tải lịch sử đăng ký:", err);
+      }
+    };
+
+    fetchHistory();
+  }, [id]);
+
+  // Cancel registration before event starts
+  const handleCancelRegistration = async () => {
+    if (!registrationId) return;
+    if (!confirm("Bạn có chắc muốn huỷ đăng ký?")) return;
+    try {
+      const res = await axios.put(`/registrations/cancel/${registrationId}`);
+      alert("Đã huỷ đăng ký");
+      // refresh local status
+      setRegistrationStatus(res.data.status);
+      // reload counts / event info
+      const ev = await axios.get(`/events/get/${id}`);
+      setEvent(ev.data);
+      // refresh approved count
+      const { data: regs } = await axios.get(`/registrations/event/${id}`);
+      setApprovedCount(regs.filter(r => r.status === "APPROVED").length);
+    } catch (err) {
+      alert(err.response?.data?.message || err.response?.data?.error || "Huỷ đăng ký thất bại");
     }
-  }, [event]);
+  };
 
+  // Prefill form
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    if (user && user.fullName) {
+      setFormData(prev => ({
+        ...prev,
+        fullName: user.fullName || "",
+        email: user.email || "",
+        address: user.address || "",
+        phone: user.phoneNumber || "",
+      }));
+    }
+  }, []);
+
+  // Approved count cho progress
+  useEffect(() => {
+    const fetchApprovedCount = async () => {
+      if (!id) return;
+      try {
+        const res = await axios.get(`/registrations/count/${id}`, { params: { status: "APPROVED" } });
+        setApprovedCount(typeof res.data === "number" ? res.data : (res.data?.approved ?? 0));
+      } catch {
+        // fallback nếu endpoint khác tên
+        try {
+          const res2 = await axios.get(`/registrations/count/approved/${id}`);
+          setApprovedCount(typeof res2.data === "number" ? res2.data : (res2.data?.approved ?? 0));
+        } catch {
+          setApprovedCount(0);
+        }
+      }
+    };
+    fetchApprovedCount();
+  }, [id]);
+
+  const submitRegistration = async () => {
+    // minimal client-side validation and ensure payload shape matches EventRegistrationRequestDTO
+    if (!formData.fullName || !formData.phone || !formData.email) {
+      return alert("Vui lòng điền họ tên, số điện thoại và email.");
+    }
+    if (!formData.dateOfBirth) return alert("Vui lòng chọn ngày sinh.");
+    if (!formData.confirmation) return alert("Bạn phải xác nhận tham gia.");
+
+    try {
+      setLoading(true);
+
+      // normalize dateOfBirth -> yyyy-MM-dd
+      let dob = formData.dateOfBirth;
+      if (dob && dob.includes("T")) dob = dob.split("T")[0];
+
+      const payload = {
+        fullName: formData.fullName || "",
+        gender: formData.gender || "Other",
+        dateOfBirth: dob, // LocalDate expected: "yyyy-MM-dd"
+        address: formData.address || "",
+        occupation: formData.occupation || "",
+        about: formData.about || "",
+        phone: formData.phone || "",
+        email: formData.email || "",
+        school: formData.school || null,
+        experience: formData.experience || null,
+        skills: formData.skills || null,
+        confirmation: Boolean(formData.confirmation),
+      };
+
+      // debug: log payload to Network console before sending
+      console.debug("Register payload:", payload);
+
+      const { data } = await axios.post(`/registrations/register/${id}`, payload);
+      // success: update UI
+      setRegistrationStatus(data.status);
+      setRegistrationId(data.id);
+      alert("Đăng ký thành công");
+    } catch (err) {
+      console.error("Đăng ký thất bại:", err.response?.data || err);
+      alert(err.response?.data?.message || "Đăng ký thất bại");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderRegisterButton = () => {
+    // if approved and event not started -> show cancel
+    const eventStarted = event && new Date(event.startDate) <= new Date();
+    if (registrationStatus === "APPROVED" && !eventStarted) {
+      return (
+        <div className="flex gap-2">
+          <button onClick={handleCancelRegistration} className="px-4 py-2 bg-red-600 text-white rounded-lg">
+            Huỷ đăng ký
+          </button>
+        </div>
+      );
+    }
+    if (registrationStatus === "APPROVED") {
+      return (
+        <button className="px-5 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">
+          Đã đăng ký
+        </button>
+      );
+    }
+    if (registrationStatus === "PENDING") {
+      return (
+        <button className="px-5 py-2.5 rounded-lg bg-yellow-400 text-black hover:bg-yellow-500 transition">
+          Đang chờ xác nhận
+        </button>
+      );
+    }
+    return (
+      <button
+        onClick={() => setShowForm(true)}
+        className="px-5 py-2.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition"
+      >
+        Đăng ký tham gia
+      </button>
+    );
+  };
+
+  // Loading skeleton
   if (loading) {
-    return <div className="text-center py-20 text-gray-500">Đang tải dữ liệu...</div>;
+    return (
+      <div className="animate-pulse">
+        <div className="h-64 bg-gray-200"></div>
+        <div className="max-w-5xl mx-auto p-6 grid md:grid-cols-3 gap-6 -mt-10">
+          <div className="md:col-span-2 bg-white rounded-xl h-40"></div>
+          <div className="bg-white rounded-xl h-40"></div>
+        </div>
+      </div>
+    );
   }
 
-  if (!event) {
-    return <div className="text-center py-20 text-red-500">Không tìm thấy sự kiện.</div>;
-  }
+  if (!event) return <div className="p-6 text-center">Không tìm thấy sự kiện.</div>;
 
-  // Giả sử event có registered và rating; nếu không, có thể fetch thêm hoặc dummy
-  const registered = event.registered || 42;
-  const rating = event.rating || 5.0;
-  const remaining = (event.maxParticipants || 50) - registered;
+  const capacity = event.maxParticipants || 50;
+  const progress = capacity > 0 ? Math.min(100, (approvedCount / capacity) * 100) : 0;
+  const imgSrc = getFileUrl(event?.imageFile);
+
+  const statusBadge =
+    registrationStatus === "APPROVED" ? "bg-blue-100 text-blue-700" :
+    registrationStatus === "PENDING" ? "bg-yellow-100 text-yellow-800" :
+    "bg-emerald-100 text-emerald-700";
+
+  const canAccessChannel =
+    event &&
+    (
+      // approved participants AND approved event
+      (event.status === "APPROVED" && registrationStatus === "APPROVED")
+      // OR event creator (manager) can always access channel for their event
+      || (storedUser && storedUser.role === "EVENT_MANAGER" && storedUser.id === event.createdById)
+      // OR admins (if needed)
+      || (storedUser && (storedUser.role === "ADMIN"))
+    );
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Banner */}
-      <div className="relative h-[280px] bg-cover bg-center flex items-center justify-center text-center" style={{ backgroundImage: `url(${event.imageFile || '/images/default-event.jpg'})` }}>
-        <div className="absolute inset-0 bg-emerald-800/50"></div>
-        <div className="absolute top-6 left-0 right-0 z-20">
-          <div className="max-w-7xl mx-auto px-4 text-white text-sm flex gap-2">
-            <Link to="/events" className="hover:underline">Sự kiện</Link>
-            <span>/</span>
-            <span className="font-semibold text-white">{event.title}</span>
+    <>
+      <div className="bg-gray-50">
+        <div className="relative h-64 md:h-80 w-full">
+          <img src={imgSrc} alt={event.title} className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent"></div>
+
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-full max-w-5xl px-6">
+            <div className="flex flex-wrap items-center justify-between">
+              <div>
+                <h1 className="text-white text-2xl md:text-3xl font-bold">{event.title}</h1>
+                <p className="text-gray-200">{event.location}</p>
+                <p className="text-gray-300 text-sm">
+                  {new Date(event.startDate).toLocaleString("vi-VN")} - {new Date(event.endDate).toLocaleString("vi-VN")}
+                </p>
+              </div>
+              <Badge className={`${statusBadge} shadow`}>
+                {registrationStatus === "APPROVED" ? "Bạn đã đăng ký"
+                  : registrationStatus === "PENDING" ? "Chờ xác nhận"
+                  : "Chưa đăng ký"}
+              </Badge>
+            </div>
           </div>
         </div>
+        <div className="max-w-5xl mx-auto p-6 -mt-10">
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Left: Detail card */}
+            <div className="md:col-span-2 bg-white rounded-2xl shadow-sm p-6">
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <Badge className="bg-emerald-100 text-emerald-700">
+                  {event.category?.name || "Khác"}
+                </Badge>
+                <Badge className={
+                  event.status === "APPROVED" ? "bg-green-100 text-green-700" :
+                  event.status === "PENDING" ? "bg-orange-100 text-orange-700" :
+                  event.status === "COMPLETED" ? "bg-gray-200 text-gray-700" :
+                  event.status === "CANCELED" ? "bg-red-100 text-red-700" :
+                  "bg-gray-100 text-gray-700"
+                }>
+                  Trạng thái: {event.status}
+                </Badge>
+              </div>
 
-        <div className="relative z-10 text-white">
-          <h1 className="text-5xl font-bold">{event.title}</h1>
-          <p className="text-gray-200 text-lg">{event.category?.name || "Khác"}</p>
-        </div>
-      </div>
-
-      {/* Bubble tham gia */}
-      <div className="relative -mt-12 max-w-5xl mx-auto z-20">
-        <div className="absolute left-8 bg-white rounded-lg shadow-md p-4 flex items-center gap-2">
-          <span className="text-green-500">❤️</span>
-          <div>
-            <p className="font-semibold">Tham gia ngay hôm nay.</p>
-            <p className="text-sm text-gray-500">Còn {remaining} suất tham gia hôm nay.</p>
-          </div>
-        </div>
-        <div className="absolute right-8 bg-green-500 text-white rounded-full px-4 py-2">
-          Đang diễn ra
-        </div>
-      </div>
-
-      {/* Nội dung chi tiết */}
-      <div className="max-w-5xl mx-auto bg-white rounded-xl shadow-lg -mt-12 pt-10 p-8 relative z-20"> {/* Điều chỉnh padding để bubble không chồng */}
-        <Link
-          to="/events"
-          className="inline-flex items-center text-emerald-600 mb-4 hover:underline"
-        >
-          <FiArrowLeft className="mr-2" /> Quay lại danh sách
-        </Link>
-
-        {/* Tab menu */}
-        <nav className="flex gap-8 text-sm">
-
-          <button
-            onClick={() => setTab("overview")}
-            className={`pb-3 font-medium ${tab === "overview" ? "border-b-2 border-emerald-600 text-emerald-600" : "text-gray-500"}`}
-          >
-            Tổng quan
-          </button>
-
-          <button
-            onClick={() => setTab("detail")}
-            className={`pb-3 ${tab === "detail" ? "border-b-2 border-emerald-600 text-emerald-600" : "text-gray-500"}`}
-          >
-            Chi tiết
-          </button>
-
-          <button
-            onClick={() => setTab("images")}
-            className={`pb-3 ${tab === "images" ? "border-b-2 border-emerald-600 text-emerald-600" : "text-gray-500"}`}
-          >
-            Hình ảnh
-          </button>
-
-          <button
-            onClick={() => setTab("discussion")}
-            className={`pb-3 ${tab === "discussion" ? "border-b-2 border-emerald-600 text-emerald-600" : "text-gray-500"}`}
-          >
-            Trao đổi
-          </button>
-
-        </nav>
-
-        {tab === "overview" && (
-          <>
-            {/* Toàn bộ code giao diện chi tiết hiện tại của bạn */}
-          </>
-        )}
-
-        {tab === "detail" && (
-          <p className="text-gray-600">Hiển thị nội dung chi tiết khác…</p>
-        )}
-
-        {tab === "images" && (
-          <p className="text-gray-600">Hiển thị album ảnh…</p>
-        )}
-
-        {tab === "discussion" && (
-          <EventChannel eventId={event.id} />
-        )}
-
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Thông tin chính */}
-          <div className="lg:col-span-2">
-            <p className="text-gray-700 leading-relaxed mb-6">
-              {event.description || "Sự kiện này chưa có mô tả chi tiết."}
-            </p>
-
-            <div className="flex flex-col gap-3 text-gray-600">
-              <p className="flex items-center gap-2">
-                <FiCalendar className="text-emerald-600" />
-                <span>
-                  {new Date(event.startDate).toLocaleString("vi-VN")} -{" "}
-                  {new Date(event.endDate).toLocaleString("vi-VN")}
-                </span>
+              <p className="text-gray-700 leading-relaxed">
+                {event.description || "Sự kiện cộng đồng."}
               </p>
 
-              <p className="flex items-center gap-2">
-                <FiMapPin className="text-emerald-600" />
-                <span>{event.location}</span>
-              </p>
+              {/* Progress */}
+              <div className="mt-6">
+                <div className="flex justify-between text-sm text-gray-600 mb-1">
+                  <span>Đã duyệt</span>
+                  <span>{approvedCount}/{capacity}</span>
+                </div>
+                <div className="w-full h-2 bg-gray-200 rounded-full">
+                  <div className="h-2 bg-emerald-600 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                </div>
+                <p className="text-sm text-gray-500 mt-2">Còn lại: {Math.max(0, capacity - approvedCount)}</p>
+              </div>
 
-              <p className="flex items-center gap-2">
-                <FiUsers className="text-emerald-600" />
-                <span>
-                  Tối đa {event.maxParticipants || 50} người tham gia
-                </span>
-              </p>
+              {/* Actions */}
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                {renderRegisterButton()}
+              </div>
+            </div>
 
-              <p className="text-gray-700">
-                <strong>Trạng thái:</strong> {event.status || "Chưa cập nhật"}
-              </p>
+            {/* Right: Stats */}
+            <div className="space-y-3">
+              <StatItem
+                label="Địa điểm"
+                value={event.location}
+                icon={<i className="fa-solid fa-location-dot" />}
+              />
+              <StatItem
+                label="Thời gian bắt đầu"
+                value={new Date(event.startDate).toLocaleString("vi-VN")}
+                icon={<i className="fa-regular fa-clock" />}
+              />
+              <StatItem
+                label="Sức chứa"
+                value={`${capacity} người`}
+                icon={<i className="fa-solid fa-users" />}
+              />
+              <StatItem
+                label="Người tạo"
+                value={event.createdByFullName || "Quản lý sự kiện"}
+                icon={<i className="fa-regular fa-user" />}
+              />
             </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="bg-emerald-50 p-5 rounded-xl">
-            <p className="text-gray-700 mb-2">
-              <strong>Người tạo:</strong> {event.createdById || "Tình nguyện viên"}
-            </p>
-            <p className="text-gray-600 text-sm mb-4">
-              Bằng cách tham gia sự kiện này bạn đang tạo ra sự thay đổi tích cực
-            </p>
+          {/* Tabs */}
+          <div className="max-w-6xl mx-auto px-4 mt-6">
+            <div className="flex gap-3 border-b pb-3">
+              <button
+                className={`px-4 py-2 -mb-px ${activeTab === "info" ? "border-b-2 border-emerald-600 text-emerald-600" : "text-gray-600"}`}
+                onClick={() => setActiveTab("info")}
+              >
+                Thông tin
+              </button>
 
-            {isLoggedIn && (
-              <>
-                {registrationStatus === "APPROVED" ? (
-                  <button
-                    onClick={handleCancelRegistration}
-                    className="w-full bg-red-600 text-white py-3 rounded-lg mt-4 hover:bg-red-700 transition"
-                  >
-                    Hủy đăng ký
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setShowForm(true)}
-                    className="w-full bg-emerald-600 text-white py-3 rounded-lg mt-4 hover:bg-emerald-700 transition"
-                  >
-                    Đăng ký tham gia
-                  </button>
-                )}
-              </>
-            )}
+              {event?.status === "APPROVED" && (
+                <button
+                  className={`px-4 py-2 -mb-px ${activeTab === "channel" ? "border-b-2 border-emerald-600 text-emerald-600" : "text-gray-600"}`}
+                  onClick={() => setActiveTab("channel")}
+                >
+                  Kênh trao đổi
+                </button>
+              )}
 
-            <button className="w-full border border-emerald-600 text-emerald-600 py-3 rounded-lg mt-3 hover:bg-emerald-50 transition">
-              ❤️ Thêm vào yêu thích
-            </button>
+              {storedUser && (
+                <button
+                  className={`px-4 py-2 -mb-px ${activeTab === "myposts" ? "border-b-2 border-emerald-600 text-emerald-600" : "text-gray-600"}`}
+                  onClick={() => setActiveTab("myposts")}
+                >
+                  Bài đăng của bạn
+                </button>
+              )}
+
+              {/* show channel tab also if creator/manager */}
+              {canAccessChannel && event?.status !== "APPROVED" && (
+                <button
+                  className={`px-4 py-2 -mb-px ${activeTab === "channel" ? "border-b-2 border-emerald-600 text-emerald-600" : "text-gray-600"}`}
+                  onClick={() => setActiveTab("channel")}
+                >
+                  Kênh trao đổi
+                </button>
+              )}
+            </div>
+
+            <div className="mt-6">
+              {activeTab === "info" && (
+                <>
+                  {/* ...existing EventDetail info rendering ... */}
+                  <div className="grid md:grid-cols-3 gap-6">
+                    {/* Left: Detail card */}
+                    <div className="md:col-span-2 bg-white rounded-2xl shadow-sm p-6">
+                      <div className="flex flex-wrap items-center gap-3 mb-4">
+                        <Badge className="bg-emerald-100 text-emerald-700">
+                          {event.category?.name || "Khác"}
+                        </Badge>
+                        <Badge className={
+                          event.status === "APPROVED" ? "bg-green-100 text-green-700" :
+                          event.status === "PENDING" ? "bg-orange-100 text-orange-700" :
+                          event.status === "COMPLETED" ? "bg-gray-200 text-gray-700" :
+                          event.status === "CANCELED" ? "bg-red-100 text-red-700" :
+                          "bg-gray-100 text-gray-700"
+                        }>
+                          Trạng thái: {event.status}
+                        </Badge>
+                      </div>
+
+                      <p className="text-gray-700 leading-relaxed">
+                        {event.description || "Sự kiện cộng đồng."}
+                      </p>
+
+                      {/* Progress */}
+                      <div className="mt-6">
+                        <div className="flex justify-between text-sm text-gray-600 mb-1">
+                          <span>Đã duyệt</span>
+                          <span>{approvedCount}/{capacity}</span>
+                        </div>
+                        <div className="w-full h-2 bg-gray-200 rounded-full">
+                          <div className="h-2 bg-emerald-600 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                        </div>
+                        <p className="text-sm text-gray-500 mt-2">Còn lại: {Math.max(0, capacity - approvedCount)}</p>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="mt-6 flex flex-wrap items-center gap-3">
+                        {renderRegisterButton()}
+                      </div>
+                    </div>
+
+                    {/* Right: Stats */}
+                    <div className="space-y-3">
+                      <StatItem
+                        label="Địa điểm"
+                        value={event.location}
+                        icon={<i className="fa-solid fa-location-dot" />}
+                      />
+                      <StatItem
+                        label="Thời gian bắt đầu"
+                        value={new Date(event.startDate).toLocaleString("vi-VN")}
+                        icon={<i className="fa-regular fa-clock" />}
+                      />
+                      <StatItem
+                        label="Sức chứa"
+                        value={`${capacity} người`}
+                        icon={<i className="fa-solid fa-users" />}
+                      />
+                      <StatItem
+                        label="Người tạo"
+                        value={event.createdByFullName || "Quản lý sự kiện"}
+                        icon={<i className="fa-regular fa-user" />}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeTab === "channel" && canAccessChannel && (
+                <EventChannel eventId={id} />
+              )}
+
+              {activeTab === "channel" && !canAccessChannel && (
+                <p className="text-gray-500">Bạn không có quyền truy cập kênh trao đổi của sự kiện này.</p>
+              )}
+
+              {activeTab === "myposts" && (
+                <EventMyPosts eventId={id} />
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Stats boxes */}
-        <div className="grid grid-cols-4 gap-4 mt-8">
-          <div className="bg-green-100 rounded-lg p-4 text-center">
-            <FiCalendar className="text-green-500 mx-auto mb-2" size={24} />
-            <p className="text-2xl font-bold">{timeLeft.days}</p>
-            <p className="text-sm text-gray-600">Ngày</p>
-          </div>
-          <div className="bg-blue-100 rounded-lg p-4 text-center">
-            <FiClock className="text-blue-500 mx-auto mb-2" size={24} />
-            <p className="text-2xl font-bold">{timeLeft.hours}</p>
-            <p className="text-sm text-gray-600">Giờ</p>
-          </div>
-          <div className="bg-purple-100 rounded-lg p-4 text-center">
-            <FiUsers className="text-purple-500 mx-auto mb-2" size={24} />
-            <p className="text-2xl font-bold">{registered}</p>
-            <p className="text-sm text-gray-600">Dã đang ký</p> {/* Giữ nguyên như ảnh, có lẽ lỗi đánh máy cho "Đã đăng ký" */}
-          </div>
-          <div className="bg-orange-100 rounded-lg p-4 text-center">
-            <FaStar className="text-orange-500 mx-auto mb-2" size={24} />
-            <p className="text-2xl font-bold">{rating}</p>
-            <p className="text-sm text-gray-600">Đánh giá</p>
-          </div>
-        </div>
-
-        {/* Nút đăng nhập ngay */}
-        {!isLoggedIn && (
-          <Link
-            to="/login"
-            className="block w-full text-center bg-emerald-600 text-white py-3 rounded-lg mt-6 hover:bg-emerald-700 transition"
-          >
-            Đăng nhập ngay
-          </Link>
+        {/* Form đăng ký */}
+        {showForm && (
+          <RegistrationForm
+            formData={formData}
+            setFormData={setFormData}
+            onClose={() => setShowForm(false)}
+            onSubmit={submitRegistration}
+          />
         )}
       </div>
-      {showForm && (
-        <RegistrationForm
-          formData={formData}
-          setFormData={setFormData}
-          onClose={() => setShowForm(false)}
-          onSubmit={handleRegister}
-        />
-      )}
-    </div>
+    </>
   );
-};
-
-export default EventDetail;
+}

@@ -33,9 +33,6 @@ public class Event {
     @Column(nullable = false)
     private String location;
 
-    @Column(nullable = false)
-    private String coordinates;  // "lat,long"
-
     @Enumerated(EnumType.STRING)
     private EventStatus status;
 

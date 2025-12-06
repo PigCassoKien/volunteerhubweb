@@ -16,6 +16,11 @@ public class EventRegistrationDTO {
     private LocalDateTime completedAt;
     private String certificateUrl;
 
+    // additional fields to show event info in activity list
+    private String eventTitle;
+    private LocalDateTime eventStartDate;
+    private String eventLocation;
+
     // volunteer form fields exposed to manager / owner
     private String fullName;
     private String gender;

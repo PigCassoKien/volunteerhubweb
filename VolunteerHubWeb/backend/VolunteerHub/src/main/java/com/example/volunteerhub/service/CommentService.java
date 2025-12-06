@@ -105,25 +105,23 @@ public class CommentService {
                 .orElseThrow(() -> new RuntimeException("Post not found"));
 
         Long eventId = post.getEvent().getId();
-
-        User user = userRepository.findByEmail(email)
+        User requester = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        boolean isEventManager = post.getEvent().getCreatedBy() != null && post.getEvent().getCreatedBy().getId().equals(user.getId());
-        boolean isParticipant = registrationService.hasApproveRegistration(eventId, user.getId());
+        boolean isManager = post.getEvent().getCreatedBy() != null && post.getEvent().getCreatedBy().getId().equals(requester.getId());
+        boolean isParticipant = registrationService.hasApproveRegistration(eventId, requester.getId());
 
-        if (!isEventManager && !isParticipant) {
-            throw new RuntimeException("Forbidden: only event participants or manager can view comments");
+        if (!isManager && !isParticipant) {
+            throw new RuntimeException("Unauthorized to view comments");
         }
 
         return commentRepository.findByPostId(postId).stream()
-                .map(comment -> {
-                    CommentDTO dto = modelMapper.map(comment, CommentDTO.class);
-                    dto.setUserId(comment.getUser().getId());
-                    dto.setPostId(postId);
-                    dto.setParentCommentId(comment.getParentComment() != null ? comment.getParentComment().getId() : null);
-                    dto.setCreatedAt(comment.getCreatedAt());
-                    dto.setUpdatedAt(comment.getUpdatedAt());
+                .map(c -> {
+                    CommentDTO dto = modelMapper.map(c, CommentDTO.class);
+                    dto.setUserId(c.getUser() != null ? c.getUser().getId() : null);
+                    dto.setUserFullName(c.getUser() != null ? c.getUser().getFullName() : null);
+                    dto.setParentCommentId(c.getParentComment() != null ? c.getParentComment().getId() : null);
+                    dto.setPostId(c.getPost() != null ? c.getPost().getId() : null);
                     return dto;
                 })
                 .collect(Collectors.toList());

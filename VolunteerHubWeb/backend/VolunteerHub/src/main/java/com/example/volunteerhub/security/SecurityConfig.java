@@ -42,6 +42,7 @@ public class SecurityConfig {
                                 "/api/events/get/**",
                                 "/api/users/**",
                                 "/api/registrations/count/**",
+                                "/uploads/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
@@ -51,7 +52,7 @@ public class SecurityConfig {
                         .hasAnyRole("EVENT_MANAGER", "ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/volunteer/**").hasRole("VOLUNTEER")
-
+                        .requestMatchers("/uploads/**").permitAll() 
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -63,10 +64,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173")); // Cho phép React truy cập
+        configuration.setAllowedOrigins(List.of("http://localhost:5173", "https://localhost:5173")); // dev origins
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true); // Nếu bạn gửi cookie/token qua header
+        configuration.setAllowedHeaders(List.of("*")); // allow Authorization header
+        configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

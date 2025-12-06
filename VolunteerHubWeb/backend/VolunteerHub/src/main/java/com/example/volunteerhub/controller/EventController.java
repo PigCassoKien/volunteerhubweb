@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,7 +19,12 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -32,6 +38,123 @@ public class EventController {
 
     @Autowired
     private EventService eventService;
+
+    @Value("${upload.dir:uploads}")
+    private String uploadDir;
+
+    // optional per-project override for event uploads; if set absolute or relative it's resolved
+    @Value("${event.upload.dir:}")
+    private String eventUploadDir;
+
+    // Multipart create: accepts one image file (imageFile)
+    @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Create a new event (with optional image)")
+    @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN')")
+    public ResponseEntity<EventDTO> createEventMultipart(
+            @RequestParam("title") String title,
+            @RequestParam("description") String description,
+            @RequestParam("location") String location,
+            @RequestParam("startDate") String startDate,
+            @RequestParam("endDate") String endDate,
+            @RequestParam(value = "categoryId", required = false) Long categoryId,
+            @RequestParam(value = "imageFile", required = false) MultipartFile imageFile,
+            Authentication authentication
+    ) throws Exception {
+        try {
+            System.out.println("[EventController] createEventMultipart received: title=" + title + ", startDate=" + startDate + ", endDate=" + endDate + ", categoryId=" + categoryId);
+
+            // Parse start/end into LocalDateTime with tolerant parsing
+            LocalDateTime startDt = parseToLocalDateTime(startDate);
+            LocalDateTime endDt = parseToLocalDateTime(endDate);
+            if (startDt == null || endDt == null) {
+                throw new RuntimeException("Không thể đọc ngày bắt đầu/ket thúc. Định dạng hợp lệ: yyyy-MM-dd'T'HH:mm[:ss] hoặc ISO_OFFSET_DATE_TIME.");
+            }
+
+            EventDTO dto = new EventDTO();
+            dto.setTitle(title);
+            dto.setDescription(description);
+            dto.setLocation(location);
+            dto.setStartDate(startDt);
+            dto.setEndDate(endDt);
+
+            if (categoryId != null) {
+                com.example.volunteerhub.entity.Category c = new com.example.volunteerhub.entity.Category();
+                c.setId(categoryId);
+                dto.setCategory(c);
+            }
+
+            // save image file if provided under uploadDir/events
+            if (imageFile != null && !imageFile.isEmpty()) {
+                Path baseRoot = (eventUploadDir != null && !eventUploadDir.isBlank())
+                        ? Path.of(eventUploadDir).toAbsolutePath().normalize()
+                        : Path.of(uploadDir).toAbsolutePath().normalize();
+                Path baseDir = baseRoot.resolve("events");
+                Files.createDirectories(baseDir);
+                String original = Path.of(imageFile.getOriginalFilename()).getFileName().toString();
+                String filename = System.currentTimeMillis() + "_" + original.replaceAll("[^a-zA-Z0-9._-]", "_");
+                Path target = baseDir.resolve(filename);
+                Files.copy(imageFile.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+                dto.setImageFile("events/" + filename);
+                System.out.println("[EventController] saved event image -> " + target.toAbsolutePath());
+            }
+
+            EventDTO created = eventService.createEvent(dto, authentication.getName());
+            return ResponseEntity.ok(created);
+        } catch (DateTimeParseException dtp) {
+            throw new RuntimeException("Ngày không hợp lệ: " + dtp.getMessage());
+        } catch (RuntimeException re) {
+            // propagate with message for frontend
+            throw re;
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            throw new RuntimeException("Lỗi khi tạo sự kiện: " + ex.getMessage());
+        }
+    }
+
+    // Multipart update (allows replacing/adding image)
+    @PutMapping(value = "/update/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER','ROLE_ADMIN')")
+    public ResponseEntity<EventDTO> updateEventMultipart(
+            @PathVariable Long id,
+            @RequestParam(value = "title", required = false) String title,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "location", required = false) String location,
+            @RequestParam(value = "startDate", required = false) String startDate,
+            @RequestParam(value = "endDate", required = false) String endDate,
+            @RequestParam(value = "categoryId", required = false) Long categoryId,
+            @RequestParam(value = "imageFile", required = false) MultipartFile imageFile,
+            Authentication authentication
+    ) throws Exception {
+        EventDTO dto = new EventDTO();
+        dto.setId(id);
+        if (title != null) dto.setTitle(title);
+        if (description != null) dto.setDescription(description);
+        if (location != null) dto.setLocation(location);
+        if (startDate != null) dto.setStartDate(LocalDateTime.parse(startDate));
+        if (endDate != null) dto.setEndDate(LocalDateTime.parse(endDate));
+        if (categoryId != null) {
+            com.example.volunteerhub.entity.Category c = new com.example.volunteerhub.entity.Category();
+            c.setId(categoryId);
+            dto.setCategory(c);
+        }
+
+        if (imageFile != null && !imageFile.isEmpty()) {
+            Path baseRoot = (eventUploadDir != null && !eventUploadDir.isBlank())
+                    ? Path.of(eventUploadDir).toAbsolutePath().normalize()
+                    : Path.of(uploadDir).toAbsolutePath().normalize();
+            Path baseDir = baseRoot.resolve("events");
+            Files.createDirectories(baseDir);
+            String original = Path.of(imageFile.getOriginalFilename()).getFileName().toString();
+            String filename = System.currentTimeMillis() + "_" + original.replaceAll("[^a-zA-Z0-9._-]", "_");
+            Path target = baseDir.resolve(filename);
+            Files.copy(imageFile.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+            System.out.println("[EventController] saved event image -> " + target.toAbsolutePath());
+            dto.setImageFile("events/" + filename);
+        }
+
+        EventDTO updated = eventService.updateEvent(id, dto, authentication.getName());
+        return ResponseEntity.ok(updated);
+    }
 
     @PostMapping("/create")
     @Operation(summary = "Create a new event", responses = {
@@ -109,34 +232,25 @@ public class EventController {
         }
     }
 
-    @PutMapping("update/{id}")
-    @Operation(summary = "Update event information", responses = {
-            @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json", schema = @Schema(implementation = EventDTO.class))),
-            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Not Found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
-    }, parameters = {
-            @Parameter(name = "Authorization", in = ParameterIn.HEADER, schema = @Schema(type = "string"), example = "Bearer <token>", required = true)
-    })
-    @PreAuthorize("hasAuthority('ROLE_EVENT_MANAGER')")
-    public ResponseEntity<EventDTO> updateEvent(@PathVariable Long id, @Valid @RequestBody EventDTO eventDTO, Authentication authentication) {
+    @GetMapping("/my")
+    @Operation(summary = "Get events created by authenticated user")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<EventDTO>> getMyEvents(Authentication authentication) {
         String email = authentication.getName();
-        return ResponseEntity.ok(eventService.updateEvent(id, eventDTO, email));
+        return ResponseEntity.ok(eventService.getEventsByManager(email));
     }
 
-    @DeleteMapping("delete/{id}")
-    @Operation(summary = "Delete event", responses = {
-            @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json")),
-            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Not Found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
-    }, parameters = {
-            @Parameter(name = "Authorization", in = ParameterIn.HEADER, schema = @Schema(type = "string"), example = "Bearer <token>", required = true)
-    })
-    @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @PutMapping("/update/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER','ROLE_ADMIN')")
+    public ResponseEntity<EventDTO> updateEvent(@PathVariable Long id, @RequestBody EventDTO dto, Authentication authentication) {
+        EventDTO updated = eventService.updateEvent(id, dto, authentication.getName());
+        return ResponseEntity.ok(updated);
+    }
+
+    @DeleteMapping("/delete/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER','ROLE_ADMIN')")
     public ResponseEntity<Void> deleteEvent(@PathVariable Long id, Authentication authentication) {
-        String email = authentication.getName();
-        eventService.deleteEvent(id, email);
+        eventService.deleteEvent(id, authentication.getName());
         return ResponseEntity.ok().build();
     }
 

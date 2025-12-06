@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import axios from "axios";
+import api from "../../api/axios";
 import {
   FiUser,
   FiMail,
@@ -29,10 +29,7 @@ export default function Profile() {
   useEffect(() => {
     if (!token || !storedUser) return;
 
-    axios
-      .get(`/api/users/get/${storedUser.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+    api.get(`/users/get/${storedUser.id}`)
       .then((res) => {
         setUser(res.data);
         setLoading(false);
@@ -49,15 +46,10 @@ export default function Profile() {
     formData.append("avatar", file);
 
     try {
-      const res = await axios.post(
-        `/api/users/upload-avatar/${storedUser.id}`,
+      const res = await api.post(
+        `/users/upload-avatar/${storedUser.id}`,
         formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
-        }
+        { headers: { "Content-Type": "multipart/form-data" } }
       );
 
       setUser({ ...user, avatarFile: res.data.fileName });
@@ -191,7 +183,9 @@ export default function Profile() {
               <TabInfo user={user} setUser={setUser} saving={saving} setSaving={setSaving} />
             )}
             {activeTab === "activity" && <TabActivity user={user} />}
-            {activeTab === "achievement" && <TabAchievement user={user} />}
+            {activeTab === "achievement" && (
+              <div className="text-center text-gray-500">Tính năng đang phát triển.</div>
+            )}
             {activeTab === "settings" && <TabSettings user={user} />}
           </div>
 

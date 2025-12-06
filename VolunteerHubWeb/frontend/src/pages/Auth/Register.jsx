@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FiUser, FiMail, FiLock, FiPhone, FiMapPin } from "react-icons/fi";
+import axios from "../../api/axios";
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -36,36 +37,18 @@ export default function Register() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/users/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fullName: formData.fullName.trim(),
-          email: formData.email.toLowerCase().trim(),
-          password: formData.password,
-          phoneNumber: formData.phoneNumber.trim(),
-          address: formData.address.trim(),
-          role: formData.role, // dùng giá trị user chọn
-        }),
-
+      const { data } = await axios.post("/users/register", {
+        fullName: formData.fullName.trim(),
+        email: formData.email.toLowerCase().trim(),
+        password: formData.password,
+        phoneNumber: formData.phoneNumber.trim(),
+        address: formData.address.trim(),
+        role: formData.role,
       });
-
-      const text = await res.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error(text || "Server trả về dữ liệu không hợp lệ");
-      }
-
-      if (!res.ok) {
-        throw new Error(data.message || "Đăng ký thất bại");
-      }
-
       alert("Đăng ký thành công! Mã OTP đã được gửi đến email của bạn 📩");
       setShowOtpModal(true);
     } catch (err) {
-      alert(err.message || "Có lỗi xảy ra, vui lòng thử lại");
+      alert(err.response?.data?.message || "Có lỗi xảy ra, vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -79,30 +62,11 @@ export default function Register() {
     }
 
     try {
-      const res = await fetch("/api/otp/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: formData.email,
-          code: otp,
-          type: "REGISTER",
-        }),
+      const { data } = await axios.post("/otp/verify", {
+        email: formData.email,
+        code: otp,
+        type: "REGISTER",
       });
-
-      const text = await res.text();
-      if (!res.ok) {
-        let errorData = {};
-        try { errorData = JSON.parse(text); } catch { }
-        throw new Error(errorData.message || "Mã OTP không đúng");
-      }
-
-      // Parse data trả về
-      let data = {};
-      if (text.trim()) {
-        try { data = JSON.parse(text); } catch { }
-      }
-
-      //Lưu token + user → AUTO LOGIN
       if (data.token) localStorage.setItem("token", data.token);
       if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
 
@@ -112,7 +76,6 @@ export default function Register() {
 
       // Chuyển trang
       setTimeout(() => navigate("/"), 300);
-
     } catch (err) {
       alert(err.message || "Mã OTP sai hoặc đã hết hạn");
     }
