@@ -11,6 +11,7 @@ public class PostDTO {
     private Long id;
     private Long eventId;
     private Long userId;
+    private String userFullName; // <- added
     private String content;
     private List<String> mediaFiles;
     private PostStatus status;

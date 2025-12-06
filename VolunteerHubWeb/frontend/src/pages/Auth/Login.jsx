@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { FiMail, FiLock } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import { FaFacebook } from "react-icons/fa6";
+import axios from "../../api/axios";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -20,37 +21,31 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      const { data } = await axios.post("/auth/login", { email, password });
 
-      const text = await res.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error(text || "Server trả về dữ liệu không hợp lệ");
-      }
-
-      if (!res.ok) {
-        throw new Error(data.message || "Đăng nhập thất bại");
-      }
-
+      // store token + user
       localStorage.setItem("token", data.token);
-      if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
+      if (data.user) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+      }
 
+      // notify app about auth change
       window.dispatchEvent(new Event("auth-changed"));
+
+      // redirect: event managers go to manager dashboard immediately
+      if (data.user?.role === "EVENT_MANAGER") {
+        navigate("/manager", { replace: true });
+        return;
+      }
+
+      // default redirect after login
+      navigate("/", { replace: true });
 
       alert("Đăng nhập thành công! Chào mừng trở lại ❤️");
 
-      setTimeout(() => {
-        navigate("/");
-      }, 100);
-
+      setTimeout(() => {}, 100);
     } catch (err) {
-      alert(err.message || "Email hoặc mật khẩu không đúng");
+      alert(err.response?.data?.message || "Email hoặc mật khẩu không đúng");
     } finally {
       setLoading(false);
     }

@@ -30,6 +30,7 @@ public class EventRegistration {
     private RegistrationStatus status;
 
     private LocalDateTime registeredAt;
+    private LocalDateTime updatedAt;
     private LocalDateTime completedAt;
 
     private String fullName;

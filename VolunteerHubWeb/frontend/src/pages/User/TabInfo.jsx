@@ -1,5 +1,5 @@
 import { FiEdit3 } from "react-icons/fi";
-import axios from "axios";
+import axios from "../../api/axios";
 import { useState } from "react";
 
 export default function TabInfo({ user, setUser, saving, setSaving }) {
@@ -13,14 +13,13 @@ export default function TabInfo({ user, setUser, saving, setSaving }) {
 
     axios
       .put(
-        `/api/users/update/${storedUser.id}`,
+        `/users/update/${storedUser.id}`,
         {
           fullName: user.fullName,
           phoneNumber: user.phoneNumber,
           address: user.address,
           publicProfile: user.publicProfile,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
+        }
       )
       .then((res) => {
         setSaving(false);

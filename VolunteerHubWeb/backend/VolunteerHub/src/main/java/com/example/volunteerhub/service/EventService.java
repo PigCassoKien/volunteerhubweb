@@ -8,6 +8,9 @@ import com.example.volunteerhub.entity.enums.EventStatus;
 import com.example.volunteerhub.entity.enums.UserRole;
 import com.example.volunteerhub.repository.EventRepository;
 import com.example.volunteerhub.repository.UserRepository;
+import com.example.volunteerhub.repository.EventRegistrationRepository;
+import com.example.volunteerhub.entity.EventRegistration;
+import com.example.volunteerhub.entity.enums.RegistrationStatus;
 import jakarta.annotation.PostConstruct;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +35,9 @@ public class EventService {
     @Autowired
     private ModelMapper modelMapper;
 
+    @Autowired
+    private EventRegistrationRepository registrationRepository;
+
     private EventRegistrationService registrationService;
 
     // Create
@@ -48,21 +54,38 @@ public class EventService {
     }
 
     // Read
+    // helper: map thêm thông tin creator name + registered count
+    private EventDTO mapEventToDTOWithExtras(Event event) {
+        EventDTO dto = modelMapper.map(event, EventDTO.class);
+        // creator name
+        if (event.getCreatedBy() != null) {
+            dto.setCreatedByFullName(event.getCreatedBy().getFullName());
+            dto.setCreatedById(event.getCreatedBy().getId());
+        }
+        // registered count: tính cả APPROVED và PENDING để thể hiện lượng đăng ký hiện tại
+        List<EventRegistration> regs = registrationRepository.findByEventId(event.getId());
+        long count = regs.stream()
+                .filter(r -> r.getStatus() == RegistrationStatus.APPROVED || r.getStatus() == RegistrationStatus.PENDING)
+                .count();
+        dto.setRegisteredCount((int) count);
+        return dto;
+    }
+
     public EventDTO getEventById(Long id) {
         Event event = eventRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
-        return modelMapper.map(event, EventDTO.class);
+        return mapEventToDTOWithExtras(event);
     }
 
     public List<EventDTO> getAllEvents() {
         return eventRepository.findAll().stream()
-                .map(event -> modelMapper.map(event, EventDTO.class))
+                .map(this::mapEventToDTOWithExtras)
                 .collect(Collectors.toList());
     }
 
     public List<EventDTO> getEventsByCategory(Long categoryId) {
         return eventRepository.findByCategoryId(categoryId).stream()
-                .map(event -> modelMapper.map(event, EventDTO.class))
+                .map(this::mapEventToDTOWithExtras)
                 .collect(Collectors.toList());
     }
 
@@ -70,6 +93,12 @@ public class EventService {
         return eventRepository.findByStartDateBetween(start, end).stream()
                 .map(event -> modelMapper.map(event, EventDTO.class))
                 .collect(Collectors.toList());
+    }
+
+    public List<EventDTO> getEventsByManager(String email) {
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
+        List<Event> events = eventRepository.findByCreatedBy(user.getId());
+        return events.stream().map(this::mapEventToDTOWithExtras).collect(Collectors.toList());
     }
 
     // Update
@@ -90,7 +119,6 @@ public class EventService {
         if (eventDTO.getStartDate() != null) event.setStartDate(eventDTO.getStartDate());
         if (eventDTO.getEndDate() != null) event.setEndDate(eventDTO.getEndDate());
         if (eventDTO.getLocation() != null) event.setLocation(eventDTO.getLocation());
-        if (eventDTO.getCoordinates() != null) event.setCoordinates(eventDTO.getCoordinates());
         if (eventDTO.getCategory() != null) event.setCategory(eventDTO.getCategory());
         if (eventDTO.getMaxParticipants() != null) event.setMaxParticipants(eventDTO.getMaxParticipants());
         if (eventDTO.getImageFile() != null) event.setImageFile(eventDTO.getImageFile());

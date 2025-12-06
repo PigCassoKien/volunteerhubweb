@@ -35,30 +35,43 @@ public class WebPushNotificationService {
         Security.addProvider(new BouncyCastleProvider());
     }
 
-    public void sendNotificationToUser(Long userId, String title, String body) {
+    // send with explicit url (recommended)
+    public void sendNotificationToUser(Long userId, String title, String body, String url) {
         List<PushSubscription> subscriptions = subscriptionRepository.findAllByUserId(userId);
         for (PushSubscription subscription : subscriptions) {
             try {
-                sendPush(subscription, title, body);
+                sendPush(subscription, title, body, url);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     }
 
-    public void sendNotificationToAll(String title, String body) {
+    // legacy compatibility: no url
+    public void sendNotificationToUser(Long userId, String title, String body) {
+        sendNotificationToUser(userId, title, body, "/");
+    }
+
+    public void sendNotificationToAll(String title, String body, String url) {
         List<PushSubscription> subscriptions = subscriptionRepository.findAll();
         for (PushSubscription subscription : subscriptions) {
             try {
-                sendPush(subscription, title, body);
+                sendPush(subscription, title, body, url);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     }
 
-    private void sendPush(PushSubscription subscription, String title, String body) throws Exception {
-        String payload = String.format("{\"title\":\"%s\",\"body\":\"%s\"}", title, body);
+    // legacy compatibility
+    public void sendNotificationToAll(String title, String body) {
+        sendNotificationToAll(title, body, "/");
+    }
+
+    private void sendPush(PushSubscription subscription, String title, String body, String url) throws Exception {
+        // include url in payload so sw.js can open correct page on click
+        String payload = String.format("{\"title\":\"%s\",\"body\":\"%s\",\"url\":\"%s\"}",
+                escapeJson(title), escapeJson(body), escapeJson(url == null ? "/" : url));
 
         Notification notification = new Notification(
                 subscription.getEndpoint(),
@@ -68,11 +81,14 @@ public class WebPushNotificationService {
         );
 
         PushService pushService = new PushService();
-        // Load VAPID keys into Key objects and set them on PushService
         pushService.setPublicKey(Utils.loadPublicKey(publicKey.trim()));
         pushService.setPrivateKey(Utils.loadPrivateKey(privateKey.trim()));
         pushService.setSubject(subject);
 
         pushService.send(notification);
+    }
+
+    private String escapeJson(String s) {
+        return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

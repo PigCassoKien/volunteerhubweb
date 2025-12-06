@@ -5,8 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-import java.time.LocalDate;
-
 @Data
 public class EventRegistrationRequestDTO {
     @NotBlank
@@ -14,8 +12,10 @@ public class EventRegistrationRequestDTO {
     @NotBlank
     private String gender; // "Male", "Female", "Other", etc.
 
-    @NotNull
-    private LocalDate dateOfBirth;
+    // Accept as String from frontend (yyyy-MM-dd) and parse server-side for robust error handling
+    @NotBlank
+    private String dateOfBirth;
+
     @NotBlank
     private String address;
     @NotBlank

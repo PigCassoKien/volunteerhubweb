@@ -1,4 +1,5 @@
 import { useState } from "react";
+import axios from "../../api/axios";
 
 export default function ForgotPassword() {
   const [step, setStep] = useState(1);
@@ -11,21 +12,11 @@ export default function ForgotPassword() {
     if (!email) return alert("Vui lòng nhập email");
 
     try {
-      const res = await fetch("/api/otp/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          type: "RESET_PASSWORD",
-        }),
-      });
-
-      if (!res.ok) throw new Error("Gửi OTP thất bại");
-
+      await axios.post("/otp/generate", { email, type: "RESET_PASSWORD" });
       alert("Mã OTP đã được gửi!");
       setStep(2);
     } catch (err) {
-      alert(err.message);
+      alert(err.response?.data?.message || "Gửi OTP thất bại");
     }
   };
 
@@ -36,22 +27,11 @@ export default function ForgotPassword() {
       return alert("Mật khẩu không trùng khớp");
 
     try {
-      const res = await fetch("/api/users/reset-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          code: otp,
-          newPassword,
-        }),
-      });
-
-      if (!res.ok) throw new Error("Đặt lại mật khẩu thất bại");
-
+      await axios.post("/users/reset-password", { email, code: otp, newPassword });
       alert("Mật khẩu đã được đổi thành công!");
       window.location.href = "/login";
     } catch (err) {
-      alert(err.message);
+      alert(err.response?.data?.message || "Đặt lại mật khẩu thất bại");
     }
   };
 

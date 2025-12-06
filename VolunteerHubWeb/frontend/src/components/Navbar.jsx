@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import ContactModal from "../pages/ContactModal";
 import NotificationBell from "../components/NotificationBell";
+import { initPush } from "../utils/push";
 
 function Navbar() {
   const location = useLocation();
@@ -23,6 +24,14 @@ function Navbar() {
     const storedToken = localStorage.getItem("token");
     return storedToken && storedToken !== "undefined" ? storedToken : null;
   });
+
+  // map role -> label for UI
+  const roleLabels = {
+    VOLUNTEER: "Tình nguyện viên",
+    EVENT_MANAGER: "Quản lý sự kiện",
+    ADMIN: "Quản trị viên"
+  };
+  const roleLabel = user?.role ? (roleLabels[user.role] || user.role) : "";
 
   const updateAuthState = () => {
     try {
@@ -91,12 +100,29 @@ function Navbar() {
     },
   ];
 
+  useEffect(() => {
+    // existing auth-change handling...
+    if (token) {
+      // try register push subscription (non-blocking)
+      initPush().catch(() => {});
+    }
+  }, [token, user]);
+
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
       <nav className="max-w-7xl mx-auto flex justify-between items-center px-4 py-4">
 
         {/* Logo */}
-        <div className="flex items-center space-x-3">
+        <div
+          className="flex items-center space-x-3 cursor-pointer"
+          onClick={() => navigate("/")}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") navigate("/");
+          }}
+          aria-label="Đi đến trang chủ"
+        >
           <i className="fa-solid fa-hand-holding-heart text-green-600 text-4xl"></i>
           <div>
             <h1 className="font-extrabold text-green-700 text-2xl leading-tight">
@@ -139,7 +165,7 @@ function Navbar() {
           <div className="flex items-center gap-4">
 
             {/* 🔔 NotificationBell */}
-            <NotificationBell />
+            <NotificationBell user={user} token={token} />
 
             {/* Avatar + dropdown */}
             <div className="relative" ref={dropdownRef}>
@@ -153,7 +179,7 @@ function Navbar() {
 
                 <div className="hidden md:block text-left">
                   <p className="font-semibold text-gray-800">{user.fullName}</p>
-                  <p className="text-xs text-green-600">Tình nguyện viên</p>
+                  <p className="text-xs text-green-600">{roleLabel}</p>
                 </div>
 
                 <i className="fa-solid fa-chevron-down text-gray-500"></i>
@@ -163,7 +189,7 @@ function Navbar() {
                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border p-4 z-50">
                   <div className="pb-3 border-b">
                     <p className="font-semibold">{user.fullName}</p>
-                    <p className="text-sm text-green-600">Tình nguyện viên</p>
+                    <p className="text-sm text-green-600">{roleLabel}</p>
                   </div>
 
                   <ul className="mt-3 space-y-3 text-gray-700">
@@ -177,6 +203,18 @@ function Navbar() {
                         <i className="fa-solid fa-bookmark text-green-600"></i> Sự kiện đã lưu
                       </Link>
                     </li>
+
+                    {user?.role === "EVENT_MANAGER" && (
+                      <li>
+                        <button
+                          onClick={() => { setOpen(false); navigate("/manager"); }}
+                          className="flex items-center gap-2 hover:text-green-600 w-full text-left"
+                        >
+                          <i className="fa-solid fa-gear text-green-600"></i> Quản lý sự kiện
+                        </button>
+                      </li>
+                    )}
+
                     <li>
                       <button
                         onClick={handleLogout}

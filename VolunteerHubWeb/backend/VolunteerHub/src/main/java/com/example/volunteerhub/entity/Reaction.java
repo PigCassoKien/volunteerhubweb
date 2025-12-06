@@ -9,6 +9,11 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
+@Table(name = "reaction",
+       uniqueConstraints = {
+         @UniqueConstraint(columnNames = {"user_id", "post_id"}),
+         @UniqueConstraint(columnNames = {"user_id", "comment_id"})
+       })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

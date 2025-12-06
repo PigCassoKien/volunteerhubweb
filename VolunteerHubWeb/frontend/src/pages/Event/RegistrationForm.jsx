@@ -11,7 +11,7 @@ const RegistrationForm = ({ formData, setFormData, onClose, onSubmit }) => {
         <div className="space-y-3">
           <input
             type="text"
-            placeholder="Họ và tên"
+            placeholder="Họ và tên *"
             className="w-full p-2 border rounded"
             value={formData.fullName}
             onChange={(e) =>
@@ -29,6 +29,7 @@ const RegistrationForm = ({ formData, setFormData, onClose, onSubmit }) => {
             <option value="">Chọn giới tính</option>
             <option value="Male">Nam</option>
             <option value="Female">Nữ</option>
+            <option value="Other">Khác</option>
           </select>
 
           <input
@@ -42,7 +43,7 @@ const RegistrationForm = ({ formData, setFormData, onClose, onSubmit }) => {
 
           <input
             type="text"
-            placeholder="Địa chỉ"
+            placeholder="Địa chỉ *"
             className="w-full p-2 border rounded"
             value={formData.address}
             onChange={(e) =>
@@ -52,11 +53,40 @@ const RegistrationForm = ({ formData, setFormData, onClose, onSubmit }) => {
 
           <input
             type="text"
-            placeholder="Nghề nghiệp"
+            placeholder="Nghề nghiệp *"
             className="w-full p-2 border rounded"
             value={formData.occupation}
             onChange={(e) =>
               setFormData({ ...formData, occupation: e.target.value })
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Trường / Đơn vị (nếu có)"
+            className="w-full p-2 border rounded"
+            value={formData.school || ""}
+            onChange={(e) =>
+              setFormData({ ...formData, school: e.target.value })
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Kỹ năng (vd: sơ cứu, tổ chức...)"
+            className="w-full p-2 border rounded"
+            value={formData.skills || ""}
+            onChange={(e) =>
+              setFormData({ ...formData, skills: e.target.value })
+            }
+          />
+
+          <textarea
+            placeholder="Kinh nghiệm / Ghi chú (nếu có)"
+            className="w-full p-2 border rounded"
+            value={formData.experience || ""}
+            onChange={(e) =>
+              setFormData({ ...formData, experience: e.target.value })
             }
           />
 
@@ -71,7 +101,7 @@ const RegistrationForm = ({ formData, setFormData, onClose, onSubmit }) => {
 
           <input
             type="text"
-            placeholder="Số điện thoại"
+            placeholder="Số điện thoại *"
             className="w-full p-2 border rounded"
             value={formData.phone}
             onChange={(e) =>
@@ -81,7 +111,7 @@ const RegistrationForm = ({ formData, setFormData, onClose, onSubmit }) => {
 
           <input
             type="email"
-            placeholder="Email"
+            placeholder="Email *"
             className="w-full p-2 border rounded"
             value={formData.email}
             onChange={(e) =>
@@ -92,7 +122,7 @@ const RegistrationForm = ({ formData, setFormData, onClose, onSubmit }) => {
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
-              checked={formData.confirmation}
+              checked={Boolean(formData.confirmation)}
               onChange={(e) =>
                 setFormData({ ...formData, confirmation: e.target.checked })
               }

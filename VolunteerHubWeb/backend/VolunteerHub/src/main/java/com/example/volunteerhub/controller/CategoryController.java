@@ -58,7 +58,7 @@ public class CategoryController {
         return ResponseEntity.ok(categoryService.getAllCategories());
     }
 
-    @PutMapping("update/{id}")
+    @PutMapping("/update/{id}")
     @Operation(summary = "Update category information", responses = {
             @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CategoryDTO.class))),
             @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
@@ -68,12 +68,11 @@ public class CategoryController {
             @Parameter(name = "Authorization", in = ParameterIn.HEADER, schema = @Schema(type = "string"), example = "Bearer <token>", required = true)
     })
     @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN')")
-    public ResponseEntity<CategoryDTO> updateCategory(@PathVariable Long id, @Valid @RequestBody CategoryDTO categoryDTO, Authentication authentication) {
-        String email = authentication.getName();
-        return ResponseEntity.ok(categoryService.updateCategory(id, categoryDTO, email));
+    public ResponseEntity<CategoryDTO> updateCategory(@PathVariable Long id, @RequestBody CategoryDTO dto, Authentication authentication) {
+        return ResponseEntity.ok(categoryService.updateCategory(id, dto, authentication.getName()));
     }
 
-    @DeleteMapping("delete/{id}")
+    @DeleteMapping("/delete/{id}")
     @Operation(summary = "Delete category", responses = {
             @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json")),
             @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
@@ -84,8 +83,7 @@ public class CategoryController {
     })
     @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN')")
     public ResponseEntity<Void> deleteCategory(@PathVariable Long id, Authentication authentication) {
-        String email = authentication.getName();
-        categoryService.deleteCategory(id, email);
+        categoryService.deleteCategory(id, authentication.getName());
         return ResponseEntity.ok().build();
     }
 }

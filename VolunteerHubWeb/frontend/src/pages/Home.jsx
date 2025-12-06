@@ -1,8 +1,9 @@
-import Banner from "../components/Banner";
+import React, { useEffect, useState, useRef } from "react";
+import axios from "../api/axios";
 import EventCard from "../components/EventCard";
+import Banner from "../components/Banner";
+import StatsSection from "../components/StatsSection";
 import { FaUserFriends, FaCalendarCheck, FaCheckCircle, FaClock, FaStar } from "react-icons/fa";
-import { useState, useEffect } from "react";
-import axios from "axios";
 
 export default function Home() {
   const stats = [
@@ -30,17 +31,34 @@ export default function Home() {
     },
   ];
 
+  // Thay const categories cứng bằng state lấy từ backend
+  const [categories, setCategories] = useState(["Tất cả"]);
+
+  // ref to "Tìm đam mê của bạn" section
+  const passionRef = useRef(null);
+
+  // scroll handler passed to Banner
+  const handleStartJourney = () => {
+    if (passionRef.current) {
+      passionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 600, behavior: "smooth" }); // fallback
+    }
+  };
+
   const [events, setEvents] = useState([]);
   const [category, setCategory] = useState("Tất cả");
   const [loading, setLoading] = useState(true);
-
-  const categories = ["Tất cả", "Môi trường", "Từ thiện", "Giáo dục", "Y tế", "Cộng đồng"];
+  const [myStatusByEvent, setMyStatusByEvent] = useState({});
+  const [favoriteIds, setFavoriteIds] = useState(new Set());
 
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const res = await axios.get("/api/events/all");
-        setEvents(res.data);
+        const res = await axios.get("/events/all");
+        const data = Array.isArray(res.data) ? res.data : [];
+        // CHANGED: chỉ hiển thị sự kiện đã APPROVED
+        setEvents(data.filter((e) => e.status === "APPROVED"));
       } catch (err) {
         console.error("Lỗi tải danh sách sự kiện:", err);
       } finally {
@@ -49,6 +67,105 @@ export default function Home() {
     };
     fetchEvents();
   }, []);
+
+  // load trạng thái đăng ký của tôi
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const loadMyStatuses = async () => {
+      try {
+        const res = await axios.post("/registrations/history", {
+          startDate: "2000-01-01T00:00:00",
+          endDate: "2100-01-01T00:00:00",
+          status: null,
+        });
+        const byEvent = {};
+        const priority = { APPROVED: 3, PENDING: 2, COMPLETED: 1, CANCELED: 0, REJECTED: 0 };
+        res.data.forEach((r) => {
+          if (!byEvent[r.eventId] || priority[r.status] > priority[byEvent[r.eventId]]) {
+            byEvent[r.eventId] = r.status;
+          }
+        });
+        setMyStatusByEvent(byEvent);
+      } catch {}
+    };
+    loadMyStatuses();
+  }, []);
+
+  // Thay đổi ở đây
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const res = await axios.get("/categories/all");
+        const cats = Array.isArray(res.data) ? res.data : [];
+        setCategories(["Tất cả", ...cats.map((c) => c.name)]);
+      } catch (err) {
+        console.error("Không thể tải danh mục:", err);
+        // giữ mặc định nếu lỗi
+      }
+    };
+    loadCategories();
+  }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data } = await axios.get("/events/all");
+        // loại bỏ event PENDING trên client
+        const publicEvents = (Array.isArray(data) ? data : []).filter(e => {
+          const st = String(e.status || "").toUpperCase();
+          return st === "APPROVED"; // giữ chỉ APPROVED
+        });
+
+        // load my favorites (if logged in)
+        let favIds = new Set();
+        try {
+          const favRes = await axios.get("/favorites/my");
+          favIds = new Set((favRes.data || []).map(e => String(e.id)));
+          setFavoriteIds(favIds);
+        } catch (_) {}
+
+        // ưu tiên favorites
+        const sorted = publicEvents.sort((a, b) => {
+          const fa = favIds.has(String(a.id)) ? 0 : 1;
+          const fb = favIds.has(String(b.id)) ? 0 : 1;
+          return fa - fb;
+        });
+        setEvents(sorted);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const toggleFavorite = async (eventId) => {
+    try {
+      const res = await axios.post(`/favorites/toggle/${eventId}`);
+      const newState = res.data?.favorited === true;
+      setFavoriteIds(prev => {
+        const copy = new Set(prev);
+        if (newState) copy.add(String(eventId)); else copy.delete(String(eventId));
+        return copy;
+      });
+      // reorder events to keep favorites first
+      setEvents(prev => {
+        const copy = [...prev];
+        copy.sort((a, b) => {
+          const fa = favoriteIds.has(String(a.id)) ? 0 : 1;
+          const fb = favoriteIds.has(String(b.id)) ? 0 : 1;
+          return fa - fb;
+        });
+        return copy;
+      });
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
 
   const filteredEvents =
     category === "Tất cả"
@@ -78,7 +195,8 @@ export default function Home() {
 
   return (
     <>
-      <Banner />
+      <Banner onStart={handleStartJourney} />
+
       {/* Các con số */}
       <section className="relative -mt-20 z-20">
         <div className="absolute inset-0 bg-green-50 top-20 z-0"></div>
@@ -153,7 +271,7 @@ export default function Home() {
       </section>
 
       {/* Sự kiện nổi bật*/}
-      <section className="bg-gray-50 py-14">
+      <section ref={passionRef} id="passion" className="bg-gray-50 py-14">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-4xl font-bold text-center text-emerald-700 mb-8">Tìm đam mê của bạn</h2>
           <p className="text-center text-gray-600 mb-8">Khám phá các hoạt động tình nguyện đang diễn ra phù hợp với sở thích và khả năng của bạn.</p>
@@ -179,8 +297,8 @@ export default function Home() {
             <p className="text-center text-gray-600">Đang tải sự kiện...</p>
           ) : (
             <div className="grid md:grid-cols-3 gap-6">
-              {filteredEvents.slice(0, 3).map((event) => (
-                <EventCard key={event.id} event={event} />
+              {filteredEvents.map((ev) => (
+                <EventCard key={ev.id} event={ev} status={myStatusByEvent[ev.id]} isFavorited={favoriteIds.has(String(ev.id))} onToggleFavorite={toggleFavorite} />
               ))}
             </div>
           )}
@@ -242,11 +360,11 @@ export default function Home() {
           <h2 className="text-4xl font-bold text-emerald-700 mb-4">Đối tác của chúng tôi</h2>
           <p className="text-gray-600 mb-12">Cùng hợp tác với các tổ chức uy tín để tạo ra tác động lớn hơn</p>
           <div className="flex justify-center items-center gap-20 flex-wrap">
-            <img src="src\assets\Logo_of_UNICEF.svg" alt="UNICEF" className="h-10" />
-            <img src="src\assets\American Red Cross_idC5TEOZ59_0.svg" alt="+" className="h-10" />
-            <img src="src\assets\WWF_logo_svg.png" alt="WWF" className="h-10" />
-            <img src="src\assets\OX_HL_C_RGB.png" alt="Oxfam" className="h-10" />
-            <img src="src\assets\habitat-for-humanity-seeklogo.png" alt="Habitat for Humanity" className="h-10" />
+            <img src="src/assets/Logo_of_UNICEF.svg" alt="UNICEF" className="h-10" />
+            <img src="src/assets/American Red Cross_idC5TEOZ59_0.svg" alt="+" className="h-10" />
+            <img src="src/assets/WWF_logo_svg.png" alt="WWF" className="h-10" />
+            <img src="src/assets/OX_HL_C_RGB.png" alt="Oxfam" className="h-10" />
+            <img src="src/assets/habitat-for-humanity-seeklogo.png" alt="Habitat for Humanity" className="h-10" />
           </div>
         </div>
       </section>

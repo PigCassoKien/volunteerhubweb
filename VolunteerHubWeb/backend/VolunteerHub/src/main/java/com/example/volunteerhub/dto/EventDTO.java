@@ -14,11 +14,12 @@ public class EventDTO {
     private LocalDateTime startDate;
     private LocalDateTime endDate;
     private String location;
-    private String coordinates;
     private Category category;
     private EventStatus status;
     private Long createdById;
+    private String createdByFullName;
+    private Integer registeredCount;
+    private String imageFile; // đảm bảo có trường này để frontend hiển thị ảnh
     private LocalDateTime createdAt;
     private Integer maxParticipants;
-    private String imageFile;
 }

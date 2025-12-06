@@ -21,8 +21,11 @@ import org.springframework.stereotype.Service;
 import com.itextpdf.layout.Document;
 import java.io.File;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
 
 @Service
 public class EventRegistrationService {
@@ -39,6 +42,9 @@ public class EventRegistrationService {
     @Autowired
     private ModelMapper modelMapper;
 
+    @Autowired
+    private NotificationService notificationService;
+    
     // Create
     public EventRegistrationDTO registerEvent(Long eventId, EventRegistrationRequestDTO request, String email) {
         User user = userRepository.findByEmail(email)
@@ -46,8 +52,25 @@ public class EventRegistrationService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
         if (event.getStatus() != EventStatus.APPROVED) {
-            throw new RuntimeException("Event not approved");
+            throw new RuntimeException("Không thể đăng ký sự kiện chưa được duyệt");
         }
+
+        // parse dateOfBirth (frontend should send "yyyy-MM-dd")
+        LocalDate dob = null;
+        try {
+            if (request.getDateOfBirth() != null && !request.getDateOfBirth().isBlank()) {
+                dob = LocalDate.parse(request.getDateOfBirth()); // ISO_LOCAL_DATE
+            }
+        } catch (DateTimeParseException ex) {
+            throw new RuntimeException("dateOfBirth không hợp lệ. Định dạng yêu cầu: yyyy-MM-dd");
+        }
+
+        // minimal server-side validation (extra safety)
+        if (request.getFullName() == null || request.getFullName().isBlank()) throw new RuntimeException("Họ tên là bắt buộc");
+        if (request.getPhone() == null || request.getPhone().isBlank()) throw new RuntimeException("Số điện thoại là bắt buộc");
+        if (request.getEmail() == null || request.getEmail().isBlank()) throw new RuntimeException("Email là bắt buộc");
+        if (dob == null) throw new RuntimeException("Ngày sinh là bắt buộc");
+        if (request.getConfirmation() == null || !request.getConfirmation()) throw new RuntimeException("Bạn phải xác nhận tham gia");
 
         EventRegistration registration = new EventRegistration();
         registration.setUser(user);
@@ -58,7 +81,7 @@ public class EventRegistrationService {
         // map form fields
         registration.setFullName(request.getFullName());
         registration.setGender(request.getGender());
-        registration.setDateOfBirth(request.getDateOfBirth());
+        registration.setDateOfBirth(dob);
         registration.setAddress(request.getAddress());
         registration.setOccupation(request.getOccupation());
         registration.setAbout(request.getAbout());
@@ -70,7 +93,12 @@ public class EventRegistrationService {
         registration.setConfirmation(request.getConfirmation());
 
         registration = registrationRepository.save(registration);
-        return modelMapper.map(registration, EventRegistrationDTO.class);
+
+        EventRegistrationDTO dto = modelMapper.map(registration, EventRegistrationDTO.class);
+        dto.setId(registration.getId());
+        dto.setUserId(user.getId());
+        dto.setEventId(event.getId());
+        return dto;
     }
 
     // Read
@@ -119,33 +147,44 @@ public class EventRegistrationService {
                 .collect(Collectors.toList());
     }
 
+    // Read
     public List<EventRegistrationDTO> getEventHistory(EventHistoryRequestDTO request, String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        List<EventRegistration> registrations = registrationRepository.findEventHistory(
+
+        List<EventRegistration> regs = registrationRepository.findEventHistory(
                 user.getId(),
-                request.getStatus(),
-                request.getStartDate(),
-                request.getEndDate(),
-                request.getCategoryId()
+                request != null ? request.getStatus() : null,
+                request != null ? request.getStartDate() : null,
+                request != null ? request.getEndDate() : null,
+                request != null ? request.getCategoryId() : null
         );
-        List<EventRegistrationDTO> result = registrations.stream()
-                .map(reg -> modelMapper.map(reg, EventRegistrationDTO.class))
-                .collect(Collectors.toList());
-        if ("dateAsc".equals(request.getSortBy())) {
-            result.sort((a, b) -> {
-                Event eventA = eventRepository.findById(a.getEventId()).orElseThrow();
-                Event eventB = eventRepository.findById(b.getEventId()).orElseThrow();
-                return eventA.getStartDate().compareTo(eventB.getStartDate());
-            });
-        } else if ("dateDesc".equals(request.getSortBy())) {
-            result.sort((a, b) -> {
-                Event eventA = eventRepository.findById(a.getEventId()).orElseThrow();
-                Event eventB = eventRepository.findById(b.getEventId()).orElseThrow();
-                return eventB.getStartDate().compareTo(eventA.getStartDate());
-            });
-        }
-        return result;
+
+        // Map and attach event metadata for frontend
+        return regs.stream().map(reg -> {
+            EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
+            dto.setId(reg.getId());
+            dto.setUserId(reg.getUser() != null ? reg.getUser().getId() : null);
+            dto.setEventId(reg.getEvent() != null ? reg.getEvent().getId() : null);
+            dto.setStatus(reg.getStatus());
+            dto.setRegisteredAt(reg.getRegisteredAt());
+            dto.setCompletedAt(reg.getCompletedAt());
+
+            if (reg.getEvent() != null) {
+                dto.setEventTitle(reg.getEvent().getTitle());
+                dto.setEventStartDate(reg.getEvent().getStartDate());
+                dto.setEventLocation(reg.getEvent().getLocation());
+            }
+
+            // copy some profile/registration fields so UI can show role/notes
+            dto.setFullName(reg.getFullName());
+            dto.setPhone(reg.getPhone());
+            dto.setExperience(reg.getExperience());
+            dto.setSkills(reg.getSkills());
+            dto.setCertificateUrl(null); // placeholder if you later add certificate field
+
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     // Update
@@ -157,46 +196,74 @@ public class EventRegistrationService {
             throw new RuntimeException("Forbidden");
         }
 
-        EventRegistration registration = registrationRepository.findById(registrationId)
+        EventRegistration reg = registrationRepository.findById(registrationId)
                 .orElseThrow(() -> new RuntimeException("Registration not found"));
+        reg.setStatus(RegistrationStatus.APPROVED);
+        reg.setUpdatedAt(LocalDateTime.now());
+        registrationRepository.save(reg);
 
-        Event event = registration.getEvent();
-        if (event == null || event.getCreatedBy() == null || !managerEmail.equals(event.getCreatedBy().getEmail())) {
-            throw new RuntimeException("Forbidden");
+        // send notification / webpush to the user
+        try {
+            notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.APPROVED);
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
 
-        registration.setStatus(RegistrationStatus.APPROVED);
-        registrationRepository.save(registration);
-        return modelMapper.map(registration, EventRegistrationDTO.class);
+        EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
+        dto.setId(reg.getId());
+        return dto;
     }
 
     public EventRegistrationDTO markComplete(Long registrationId, String managerEmail) {
-        User manager = userRepository.findByEmail(managerEmail)
-                .orElseThrow(() -> new RuntimeException("Manager not found"));
-        if (manager.getRole() != UserRole.EVENT_MANAGER && manager.getRole() != UserRole.ADMIN) {
-            throw new RuntimeException("Unauthorized");
-        }
-        EventRegistration registration = registrationRepository.findById(registrationId)
+        EventRegistration reg = registrationRepository.findById(registrationId)
                 .orElseThrow(() -> new RuntimeException("Registration not found"));
-        registration.setStatus(RegistrationStatus.COMPLETED);
-        registration.setCompletedAt(LocalDateTime.now());
-        String certificatePath = generateCertificate(registration);
-        registration = registrationRepository.save(registration);
-        return modelMapper.map(registration, EventRegistrationDTO.class);
+        reg.setStatus(RegistrationStatus.COMPLETED);
+        reg.setCompletedAt(LocalDateTime.now());
+        reg.setUpdatedAt(LocalDateTime.now());
+        registrationRepository.save(reg);
+
+        try {
+            notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.COMPLETED);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
+        dto.setId(reg.getId());
+        return dto;
     }
 
     public EventRegistrationDTO cancelRegistration(Long registrationId, String email) {
-        EventRegistration registration = registrationRepository.findById(registrationId)
+        EventRegistration reg = registrationRepository.findById(registrationId)
                 .orElseThrow(() -> new RuntimeException("Registration not found"));
-        if (!registration.getUser().getEmail().equals(email)) {
+
+        User requester = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // only owner of registration or admin/manager can cancel on behalf (business rule)
+        if (!reg.getUser().getId().equals(requester.getId())) {
             throw new RuntimeException("Unauthorized");
         }
-        if (registration.getEvent().getStartDate().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Cannot cancel registration for past event");
+
+        // Prevent cancel after event started
+        Event event = reg.getEvent();
+        if (event.getStartDate() != null && !event.getStartDate().isAfter(java.time.LocalDateTime.now())) {
+            throw new RuntimeException("Không thể huỷ đăng ký sau khi sự kiện đã bắt đầu");
         }
-        registration.setStatus(RegistrationStatus.CANCELED);
-        registration = registrationRepository.save(registration);
-        return modelMapper.map(registration, EventRegistrationDTO.class);
+
+        reg.setStatus(RegistrationStatus.CANCELED);
+        reg.setUpdatedAt(LocalDateTime.now());
+        registrationRepository.save(reg);
+
+        try {
+            notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.CANCELED);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
+        dto.setId(reg.getId());
+        return dto;
     }
 
     // Delete
@@ -248,5 +315,12 @@ public class EventRegistrationService {
                 .anyMatch(r -> r.getUser() != null
                         && email.equals(r.getUser().getEmail())
                         && r.getStatus() == RegistrationStatus.APPROVED);
+    }
+
+    public int countByEventAndStatus(Long eventId, com.example.volunteerhub.entity.enums.RegistrationStatus status) {
+        if (status == null) {
+            return registrationRepository.countByEventId(eventId);
+        }
+        return registrationRepository.countByEventIdAndStatus(eventId, status);
     }
 }

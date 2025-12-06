@@ -1,6 +1,6 @@
 import heroImg from "../assets/Banner.jpg";
 
-function Banner() {
+function Banner({ onStart }) {
   return (
     <section
       className="relative bg-cover bg-center bg-no-repeat h-[90vh] flex items-center justify-center"
@@ -31,7 +31,10 @@ function Banner() {
 
         {/* Nút hành động */}
         <div className="flex justify-center gap-4 mb-8 flex-wrap">
-          <button className="bg-green-600 px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition shadow-md flex items-center gap-2">
+          <button
+            onClick={() => onStart?.()}
+            className="bg-green-600 px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition shadow-md flex items-center gap-2"
+          >
             <i className="fa-solid fa-play"></i>
             Bắt đầu hành trình
           </button>

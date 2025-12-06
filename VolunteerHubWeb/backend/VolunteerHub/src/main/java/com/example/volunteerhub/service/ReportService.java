@@ -64,17 +64,30 @@ public class ReportService {
             // Styles
             Font titleFont = workbook.createFont();
             titleFont.setBold(true);
-            titleFont.setFontHeightInPoints((short) 14);
+            titleFont.setFontHeightInPoints((short) 16);
             CellStyle titleStyle = workbook.createCellStyle();
             titleStyle.setFont(titleFont);
-            titleStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+            titleStyle.setAlignment(HorizontalAlignment.LEFT);
+
+            Font subFont = workbook.createFont();
+            subFont.setFontHeightInPoints((short) 11);
+            CellStyle subStyle = workbook.createCellStyle();
+            subStyle.setFont(subFont);
+            subStyle.setAlignment(HorizontalAlignment.LEFT);
 
             Font headerFont = workbook.createFont();
             headerFont.setBold(true);
+            headerFont.setColor(IndexedColors.WHITE.getIndex());
             CellStyle headerStyle = workbook.createCellStyle();
             headerStyle.setFont(headerFont);
-            headerStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
-            headerStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+            headerStyle.setFillForegroundColor(IndexedColors.TEAL.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+            headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            headerStyle.setBorderTop(BorderStyle.THIN);
+            headerStyle.setBorderBottom(BorderStyle.THIN);
+            headerStyle.setBorderLeft(BorderStyle.THIN);
+            headerStyle.setBorderRight(BorderStyle.THIN);
 
             CellStyle wrapStyle = workbook.createCellStyle();
             wrapStyle.setWrapText(true);
@@ -84,155 +97,110 @@ public class ReportService {
             short df = createHelper.createDataFormat().getFormat("yyyy-mm-dd HH:mm");
             dateStyle.setDataFormat(df);
 
+            CellStyle linkStyle = workbook.createCellStyle();
+            Font linkFont = workbook.createFont();
+            linkFont.setColor(IndexedColors.BLUE.getIndex());
+            linkFont.setUnderline(Font.U_SINGLE);
+            linkStyle.setFont(linkFont);
+
             // Title
-            Row titleRow = sheet.createRow(0);
+            int rowIdx = 0;
+            Row titleRow = sheet.createRow(rowIdx++);
             Cell titleCell = titleRow.createCell(0);
-            titleCell.setCellValue("Event Participants Report");
+            titleCell.setCellValue("Danh sách thành viên - " + (event.getTitle() == null ? "" : event.getTitle()));
             titleCell.setCellStyle(titleStyle);
-            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(0, 0, 0, 5));
 
-            // Blank row
-            sheet.createRow(1);
+            // Event meta row
+            Row metaRow = sheet.createRow(rowIdx++);
+            metaRow.createCell(0).setCellValue("Địa điểm: " + (event.getLocation() == null ? "" : event.getLocation()));
+            metaRow.createCell(2).setCellValue("Thời gian: " + (event.getStartDate() == null ? "" : event.getStartDate().toString()));
+            metaRow.getCell(0).setCellStyle(subStyle);
+            metaRow.getCell(2).setCellStyle(subStyle);
 
-            // Event info section
-            int r = 2;
-            Row rowEvent = sheet.createRow(r++);
-            rowEvent.createCell(0).setCellValue("Event:");
-            Cell evCell = rowEvent.createCell(1);
-            evCell.setCellValue(event.getTitle() != null ? event.getTitle() : "");
-            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(2, 2, 1, 5));
+            // Empty spacer
+            rowIdx++;
 
-            Row rowDesc = sheet.createRow(r++);
-            rowDesc.createCell(0).setCellValue("Description:");
-            Cell descCell = rowDesc.createCell(1);
-            String desc = null;
-            try { desc = event.getDescription(); } catch (Exception ignored) {}
-            descCell.setCellValue(desc != null ? desc : "");
-            descCell.setCellStyle(wrapStyle);
-            // merge description across multiple columns/rows for nicer layout
-            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(3, 4, 1, 5));
-            r++; // account for merged row
-
-            Row rowDates = sheet.createRow(r++);
-            rowDates.createCell(0).setCellValue("Start Date:");
-            org.apache.poi.ss.usermodel.Cell startCell = rowDates.createCell(1);
-            try {
-                java.time.LocalDateTime sd = event.getStartDate();
-                if (sd != null) {
-                    startCell.setCellValue(java.sql.Timestamp.valueOf(sd));
-                    startCell.setCellStyle(dateStyle);
-                } else {
-                    startCell.setCellValue("");
-                }
-            } catch (Exception ignored) {
-                startCell.setCellValue("");
-            }
-
-            rowDates.createCell(2).setCellValue("End Date:");
-            org.apache.poi.ss.usermodel.Cell endCell = rowDates.createCell(3);
-            try {
-                java.time.LocalDateTime ed = event.getEndDate();
-                if (ed != null) {
-                    endCell.setCellValue(java.sql.Timestamp.valueOf(ed));
-                    endCell.setCellStyle(dateStyle);
-                } else {
-                    endCell.setCellValue("");
-                }
-            } catch (Exception ignored) {
-                endCell.setCellValue("");
-            }
-
-            Row rowLoc = sheet.createRow(r++);
-            rowLoc.createCell(0).setCellValue("Location:");
-            org.apache.poi.ss.usermodel.Cell locCell = rowLoc.createCell(1);
-            try {
-                String loc = event.getLocation();
-                locCell.setCellValue(loc != null ? loc : "");
-            } catch (Exception ignored) {
-                locCell.setCellValue("");
-            }
-            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(r - 1, r - 1, 1, 5));
-
-            // Blank row before table
-            sheet.createRow(r++);
-
-            // Table header
-            Row header = sheet.createRow(r++);
-            String[] cols = {"ID", "Full Name", "Email", "Phone Number", "Joined At", "Status"};
-            for (int i = 0; i < cols.length; i++) {
-                org.apache.poi.ss.usermodel.Cell c = header.createCell(i);
-                c.setCellValue(cols[i]);
+            // Header
+            Row header = sheet.createRow(rowIdx++);
+            String[] headers = new String[] {
+                    "STT", "Họ và tên", "Email", "Số điện thoại", "Ngày đăng ký",
+                    "Trạng thái", "URL chứng nhận", "Ngày sinh", "Địa chỉ", "Nghề nghiệp", "Kỹ năng", "Kinh nghiệm"
+            };
+            for (int i = 0; i < headers.length; i++) {
+                Cell c = header.createCell(i);
+                c.setCellValue(headers[i]);
                 c.setCellStyle(headerStyle);
             }
 
-            // Table rows
-            int rowNum = r;
-            for (EventRegistration reg : registrations) {
-                Row row = sheet.createRow(rowNum++);
-                long userId = 0;
-                String fullName = "";
-                String email = "";
-                String phone = "";
-                try {
-                    if (reg.getUser() != null) {
-                        if (reg.getUser().getId() != null) userId = reg.getUser().getId();
-                        fullName = reg.getUser().getFullName() != null ? reg.getUser().getFullName() : "";
-                        email = reg.getUser().getEmail() != null ? reg.getUser().getEmail() : "";
-                        phone = reg.getUser().getPhoneNumber() != null ? reg.getUser().getPhoneNumber() : "";
-                    }
-                } catch (Exception ignored) {}
-
-                row.createCell(0).setCellValue(userId);
-                row.createCell(1).setCellValue(fullName);
-                row.createCell(2).setCellValue(email);
-                row.createCell(3).setCellValue(phone);
-
-                // Joined At - try common field names, fall back to empty string
-                Cell joinedCell = row.createCell(4);
-                try {
-                    LocalDateTime joined = null;
-                    try { joined = reg.getRegisteredAt(); } catch (Throwable ignored) {}
-                    if (joined == null) {
-                        try { joined = reg.getRegisteredAt(); } catch (Throwable ignored) {}
-                    }
-                    if (joined != null) {
-                        joinedCell.setCellValue(java.sql.Timestamp.valueOf(joined));
-                        joinedCell.setCellStyle(dateStyle);
-                    } else {
-                        joinedCell.setCellValue("");
-                    }
-                } catch (Exception ignored) {
-                    joinedCell.setCellValue("");
+            // Content rows with zebra striping
+            int idx = 1;
+            for (EventRegistration r : registrations) {
+                Row row = sheet.createRow(rowIdx++);
+                boolean odd = (idx % 2 == 1);
+                // optional background for zebra
+                if (odd) {
+                    CellStyle zebra = workbook.createCellStyle();
+                    zebra.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+                    zebra.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                    // apply zebra to all cells later as needed by copying common styles
                 }
 
-                // Status
-                String status = "";
-                try { status = reg.getStatus() != null ? reg.getStatus().name() : ""; } catch (Exception ignored) {}
-                row.createCell(5).setCellValue(status);
+                row.createCell(0).setCellValue(idx);
+                row.createCell(1).setCellValue(r.getFullName() == null ? "" : r.getFullName());
+                row.createCell(2).setCellValue(r.getContactEmail() == null ? "" : r.getContactEmail());
+                row.createCell(3).setCellValue(r.getPhone() == null ? "" : r.getPhone());
+
+                Cell regAtCell = row.createCell(4);
+                if (r.getRegisteredAt() != null) {
+                    regAtCell.setCellValue(r.getRegisteredAt());
+                    regAtCell.setCellStyle(dateStyle);
+                } else regAtCell.setCellValue("");
+
+                row.createCell(5).setCellValue(r.getStatus() == null ? "" : r.getStatus().name());
+
+                // certificate URL (if any)
+                // EventRegistration entity currently doesn't have a certificateUrl field.
+                // Leave the column empty for now (can be populated later if certificates are stored).
+                Cell certCell = row.createCell(6);
+                certCell.setCellValue("");
+
+                // additional profile fields
+                row.createCell(7).setCellValue(r.getDateOfBirth() == null ? "" : r.getDateOfBirth().toString());
+                row.createCell(8).setCellValue(r.getAddress() == null ? "" : r.getAddress());
+                row.createCell(9).setCellValue(r.getOccupation() == null ? "" : r.getOccupation());
+                row.createCell(10).setCellValue(r.getSkills() == null ? "" : r.getSkills());
+                row.createCell(11).setCellValue(r.getExperience() == null ? "" : r.getExperience());
+
+                idx++;
             }
 
-            // Auto-size columns
-            for (int i = 0; i < cols.length; i++) {
-                sheet.autoSizeColumn(i);
-                // enforce a minimum width for better readability
-                int current = sheet.getColumnWidth(i);
-                int min = 3000;
-                if (current < min) sheet.setColumnWidth(i, min);
+            // Freeze header row (title/meta rows above header -> freeze at header.getRowNum()+1)
+            sheet.createFreezePane(0, header.getRowNum() + 1);
+
+            // Adjust column widths (sensible defaults)
+            int[] widths = new int[] { 6, 30, 28, 16, 20, 14, 40, 14, 40, 20, 30, 40 };
+            for (int i = 0; i < widths.length; i++) {
+                sheet.setColumnWidth(i, widths[i] * 256);
             }
 
-            String filePath = "./Uploads/reports/event_" + eventId + "_participants.xlsx";
-            File file = new File(filePath);
-            file.getParentFile().mkdirs();
-            try (FileOutputStream fileOut = new FileOutputStream(file)) {
-                workbook.write(fileOut);
+            // Auto-size some important columns for neatness (apply after setColumnWidth if you prefer)
+            sheet.autoSizeColumn(1);
+            sheet.autoSizeColumn(2);
+            sheet.autoSizeColumn(6);
+
+            // create temp file
+            File tmp = File.createTempFile("participants_event_" + eventId + "_", ".xlsx");
+            try (FileOutputStream fos = new FileOutputStream(tmp)) {
+                workbook.write(fos);
             }
-            return file;
+
+            return tmp;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to export participants", e);
+            throw new RuntimeException("Failed to export participants: " + e.getMessage(), e);
         } finally {
             try {
                 workbook.close();
-            } catch (Exception ignored) {}
+            } catch (Exception ignore) {}
         }
     }
 
