@@ -73,11 +73,16 @@ public class UserService {
     }
 
     public List<UserResponseDTO> getAllUsers(String currentUserEmail) {
-        if (isAdmin(currentUserEmail)) {
-            throw new RuntimeException("Unauthorized");
+        // ensure caller is admin
+        User caller = userRepository.findByEmail(currentUserEmail)
+                .orElseThrow(() -> new RuntimeException("Caller not found"));
+        if (caller.getRole() != UserRole.ADMIN) {
+            throw new org.springframework.security.access.AccessDeniedException("Forbidden");
         }
-        return userRepository.findAll().stream()
-                .map(user -> modelMapper.map(user, UserResponseDTO.class))
+
+        List<User> all = userRepository.findAll();
+        return all.stream()
+                .map(u -> modelMapper.map(u, UserResponseDTO.class))
                 .collect(Collectors.toList());
     }
 
@@ -112,16 +117,30 @@ public class UserService {
 
     public UserResponseDTO assignRole(AssignRoleRequestDTO request, String adminEmail) {
         User admin = userRepository.findByEmail(adminEmail)
-                .orElseThrow(() -> new RuntimeException("Admin not found"));
-        if (admin.getRole() != UserRole.ADMIN) {
+                .orElseThrow(() -> new RuntimeException("Admin user not found"));
+        if (admin.getRole() != com.example.volunteerhub.entity.enums.UserRole.ADMIN) {
             throw new RuntimeException("Unauthorized");
         }
-        User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        user.setRole(request.getRole());
-        user.setUpdatedAt(LocalDateTime.now());
-        user = userRepository.save(user);
-        return modelMapper.map(user, UserResponseDTO.class);
+
+        User target = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> new RuntimeException("Target user not found"));
+
+        // do not allow demoting last admin (simple safeguard)
+        if (target.getRole() == com.example.volunteerhub.entity.enums.UserRole.ADMIN
+                && request.getRole() != com.example.volunteerhub.entity.enums.UserRole.ADMIN) {
+            long adminCount = userRepository.findAll().stream()
+                    .filter(u -> u.getRole() == com.example.volunteerhub.entity.enums.UserRole.ADMIN)
+                    .count();
+            if (adminCount <= 1) {
+                throw new RuntimeException("Cannot remove role from the last admin");
+            }
+        }
+
+        target.setRole(request.getRole());
+        target.setUpdatedAt(java.time.LocalDateTime.now());
+        userRepository.save(target);
+
+        return modelMapper.map(target, UserResponseDTO.class);
     }
 
     public void lockUser(Long userId, String adminEmail) {

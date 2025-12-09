@@ -44,6 +44,7 @@ export default function ManagerEventDetail() {
   const [showNotifyModal, setShowNotifyModal] = useState(false);
   const [notifyContent, setNotifyContent] = useState("");
   const [notifyResult, setNotifyResult] = useState(null);
+  const [selectedRegistration, setSelectedRegistration] = useState(null);
 
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
 
@@ -108,6 +109,19 @@ export default function ManagerEventDetail() {
     }
   };
 
+  // Delete a registration (allowed after it's been REJECTED)
+  const deleteRegistration = async (regId) => {
+    if (!confirm("Xóa đăng ký này khỏi danh sách?")) return;
+    try {
+      await axios.delete(`/registrations/delete/${regId}`);
+      // remove from local state immediately for fast UI feedback
+      setRegistrations((prev) => prev.filter((r) => String(r.id) !== String(regId)));
+    } catch (err) {
+      console.error("deleteRegistration failed", err);
+      alert(err?.response?.data?.message || "Xóa đăng ký thất bại");
+    }
+  };
+
   // Post moderation
   const approvePost = async (postId) => {
     if (!confirm("Duyệt bài viết này?")) return;
@@ -156,34 +170,43 @@ export default function ManagerEventDetail() {
   const recipientsCount = registrations.filter((r) => r.status === "APPROVED").length;
 
   const openNotifyModal = () => {
-    setNotifyContent(`Thông báo từ ban tổ chức: ${event?.title || ""}\n\n`);
-    setNotifyResult(null);
+    // Prefill with template including event title in parentheses.
+    // The preview will render the event title in bold.
+    const prefix = `Ban tổ chức sự kiện tình nguyện (${event?.title || ""}) xin thông báo: `;
+    setNotifyContent(prefix);
     setShowNotifyModal(true);
   };
 
   const sendCustomNotification = async () => {
     if (!notifyContent || !notifyContent.trim()) {
-      setNotifyResult({ ok: false, msg: "Nội dung trống" });
+      alert("Nhập nội dung thông báo");
       return;
     }
-    if (!confirm(`Gửi thông báo tới ${recipientsCount} thành viên đã duyệt?`)) return;
     setNotifyLoading(true);
-    setNotifyResult(null);
     try {
-      await axios.post("/notifications/custom", { eventId: id, content: notifyContent.trim() });
-      setNotifyResult({ ok: true, msg: `Đã gửi tới ${recipientsCount} người` });
-      // auto close shortly
-      setTimeout(() => {
-        setShowNotifyModal(false);
-        setNotifyContent("");
-      }, 900);
+      const payload = {
+        eventId: event.id,
+        content: notifyContent,
+        includeSender: true // <-- đảm bảo gửi về cho người gửi (preview)
+      };
+      console.log("[manager] sending custom notification payload:", payload);
+      const res = await axios.post("/notifications/custom", payload);
+      setNotifyResult({ ok: true });
+      alert("Gửi thành công");
     } catch (err) {
-      console.error("Gửi thông báo thất bại", err);
-      setNotifyResult({ ok: false, msg: err.response?.data?.message || "Gửi thất bại" });
+      console.error("sendCustomNotification failed", err);
+      setNotifyResult({ ok: false, error: err.response?.data || err.message });
+      alert("Gửi thất bại: " + (err.response?.data?.message || err.message));
     } finally {
       setNotifyLoading(false);
     }
   };
+
+  // Open/close registration detail modal (fix ReferenceError)
+  const openRegistrationDetail = (reg) => {
+    setSelectedRegistration(reg);
+  };
+  const closeRegistrationDetail = () => setSelectedRegistration(null);
 
   // helpers
   const pendingPosts = posts.filter((p) => p.status === "PENDING");
@@ -260,7 +283,28 @@ export default function ManagerEventDetail() {
                     placeholder="Nhập nội dung thông báo..."
                   />
                   <div className="text-sm text-gray-500 mb-3">Xem trước:</div>
-                  <div className="border rounded p-3 mb-3 bg-gray-50 text-sm whitespace-pre-wrap">{notifyContent || <span className="text-gray-400">(chưa có nội dung)</span>}</div>
+                  <div className="border rounded p-3 mb-3 bg-gray-50 text-sm">
+                    {(() => {
+                      if (!notifyContent) return <span className="text-gray-400">(chưa có nội dung)</span>;
+                      // Try to parse the template: "Ban tổ chức sự kiện tình nguyện (eventTitle) xin thông báo: rest..."
+                      const re = /^Ban tổ chức sự kiện tình nguyện \((.*?)\) xin thông báo: ?([\s\S]*)$/;
+                      const m = notifyContent.match(re);
+                      if (m) {
+                        const titlePart = m[1];
+                        const rest = m[2] || "";
+                        return (
+                          <div className="whitespace-pre-wrap">
+                            <span>Ban tổ chức sự kiện tình nguyện (</span>
+                            <strong>{titlePart}</strong>
+                            <span>) xin thông báo: </span>
+                            <span>{rest}</span>
+                          </div>
+                        );
+                      }
+                      // fallback: render raw content
+                      return <div className="whitespace-pre-wrap">{notifyContent}</div>;
+                    })()}
+                  </div>
                   {notifyResult && (
                     <div className={`mb-3 text-sm ${notifyResult.ok ? "text-green-600" : "text-red-600"}`}>{notifyResult.msg}</div>
                   )}
@@ -320,6 +364,8 @@ export default function ManagerEventDetail() {
                     <div className="flex flex-col gap-2">
                       {r.status === "PENDING" && <button onClick={() => approveRegistration(r.id)} className="px-3 py-1 bg-emerald-600 text-white rounded">Duyệt</button>}
                       {r.status !== "REJECTED" && <button onClick={() => rejectRegistration(r.id)} className="px-3 py-1 border text-red-600 rounded">Từ chối</button>}
+                      {r.status === "REJECTED" && <button onClick={() => deleteRegistration(r.id)} className="px-3 py-1 border text-red-600 rounded">Xóa</button>}
+                      <button onClick={() => openRegistrationDetail(r)} className="px-3 py-1 border text-gray-700 rounded">Xem</button>
                       {r.status === "APPROVED" && <button onClick={() => completeRegistration(r.id)} className="px-3 py-1 border rounded">Đánh dấu hoàn thành</button>}
                     </div>
                   </div>
@@ -414,6 +460,37 @@ export default function ManagerEventDetail() {
           </div>
         )}
       </div>
+
+      {/* Registration detail modal */}
+      {selectedRegistration && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black opacity-30" onClick={closeRegistrationDetail} />
+          <div className="relative bg-white rounded-lg shadow-lg w-full max-w-2xl p-4 z-60">
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="font-semibold">Chi tiết đăng ký: {selectedRegistration.fullName}</h4>
+              <button onClick={closeRegistrationDetail} className="text-gray-500">✕</button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div><div className="text-xs text-gray-500">Họ và tên</div><div className="font-medium">{selectedRegistration.fullName}</div></div>
+              <div><div className="text-xs text-gray-500">Email</div><div className="font-medium">{selectedRegistration.contactEmail}</div></div>
+              <div><div className="text-xs text-gray-500">Số điện thoại</div><div className="font-medium">{selectedRegistration.phone}</div></div>
+              <div><div className="text-xs text-gray-500">Giới tính</div><div className="font-medium">{selectedRegistration.gender}</div></div>
+              <div><div className="text-xs text-gray-500">Ngày sinh</div><div className="font-medium">{selectedRegistration.dateOfBirth ? new Date(selectedRegistration.dateOfBirth).toLocaleDateString() : ""}</div></div>
+              <div><div className="text-xs text-gray-500">Địa chỉ</div><div className="font-medium">{selectedRegistration.address}</div></div>
+              <div><div className="text-xs text-gray-500">Nghề nghiệp</div><div className="font-medium">{selectedRegistration.occupation}</div></div>
+              <div className="md:col-span-2"><div className="text-xs text-gray-500">Giới thiệu / Kinh nghiệm</div><div className="font-medium whitespace-pre-wrap">{selectedRegistration.about || selectedRegistration.experience}</div></div>
+              <div className="md:col-span-2"><div className="text-xs text-gray-500">Kỹ năng</div><div className="font-medium">{selectedRegistration.skills}</div></div>
+              <div><div className="text-xs text-gray-500">Trạng thái</div><div className="font-medium">{selectedRegistration.status}</div></div>
+              <div><div className="text-xs text-gray-500">Đăng ký lúc</div><div className="font-medium">{selectedRegistration.registeredAt ? new Date(selectedRegistration.registeredAt).toLocaleString() : ""}</div></div>
+            </div>
+
+            <div className="mt-4 text-right">
+              <button onClick={closeRegistrationDetail} className="px-4 py-2 rounded border">Đóng</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

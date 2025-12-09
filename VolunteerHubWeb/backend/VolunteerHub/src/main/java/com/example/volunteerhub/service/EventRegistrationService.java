@@ -127,24 +127,54 @@ public class EventRegistrationService {
     }
 
 
-    public List<EventRegistrationDTO> getRegistrationsByEvent(Long eventId, String email) {
-        User manager = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        if (manager.getRole() != UserRole.EVENT_MANAGER) {
-            throw new RuntimeException("Unauthorized");
-        }
-
+    // Read registrations for an event (manager/admin only) and expose full form fields
+    public List<EventRegistrationDTO> getRegistrationsByEvent(Long eventId, String requesterEmail) {
+        // load event + requester
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
+        User requester = userRepository.findByEmail(requesterEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (event.getCreatedBy() == null || !email.equals(event.getCreatedBy().getEmail())) {
-            throw new RuntimeException("Unauthorized: not the creator of the event");
+        // allow if requester is event manager (owner) or admin
+        boolean isManager = requester.getRole() == UserRole.EVENT_MANAGER
+                && event.getCreatedBy() != null
+                && event.getCreatedBy().getId().equals(requester.getId());
+        boolean isAdmin = requester.getRole() != null && requester.getRole().toString().contains("ADMIN");
+        if (!isManager && !isAdmin) {
+            throw new RuntimeException("Unauthorized to view registrations for this event");
         }
 
-        return registrationRepository.findByEventId(eventId).stream()
-                .map(reg -> modelMapper.map(reg, EventRegistrationDTO.class))
-                .collect(Collectors.toList());
+        List<EventRegistration> regs = registrationRepository.findByEventId(eventId);
+        return regs.stream().map(r -> {
+            EventRegistrationDTO dto = new EventRegistrationDTO();
+            dto.setId(r.getId());
+            dto.setUserId(r.getUser() != null ? r.getUser().getId() : null);
+            dto.setEventId(r.getEvent() != null ? r.getEvent().getId() : null);
+            dto.setStatus(r.getStatus());
+            dto.setRegisteredAt(r.getRegisteredAt());
+            dto.setCompletedAt(r.getCompletedAt());
+            dto.setCertificateUrl(null); // set if you have it
+
+            // full volunteer form fields
+            dto.setFullName(r.getFullName());
+            dto.setGender(r.getGender());
+            dto.setDateOfBirth(r.getDateOfBirth());
+            dto.setAddress(r.getAddress());
+            dto.setOccupation(r.getOccupation());
+            dto.setAbout(r.getAbout());
+            dto.setPhone(r.getPhone());
+            dto.setContactEmail(r.getContactEmail());
+            dto.setSchool(r.getSchool());
+            dto.setExperience(r.getExperience());
+            dto.setSkills(r.getSkills());
+            dto.setConfirmation(r.getConfirmation());
+
+            // helpful event info
+            dto.setEventTitle(r.getEvent() != null ? r.getEvent().getTitle() : null);
+            dto.setEventStartDate(r.getEvent() != null ? r.getEvent().getStartDate() : null);
+            dto.setEventLocation(r.getEvent() != null ? r.getEvent().getLocation() : null);
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     // Read
@@ -189,81 +219,39 @@ public class EventRegistrationService {
 
     // Update
     public EventRegistrationDTO approveRegistration(Long registrationId, String managerEmail) {
-        User manager = userRepository.findByEmail(managerEmail)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        if (manager.getRole() != UserRole.EVENT_MANAGER) {
-            throw new RuntimeException("Forbidden");
-        }
-
-        EventRegistration reg = registrationRepository.findById(registrationId)
-                .orElseThrow(() -> new RuntimeException("Registration not found"));
+        EventRegistration reg = registrationRepository.findById(registrationId).orElseThrow(() -> new RuntimeException("Registration not found"));
         reg.setStatus(RegistrationStatus.APPROVED);
         reg.setUpdatedAt(LocalDateTime.now());
         registrationRepository.save(reg);
 
-        // send notification / webpush to the user
-        try {
-            notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.APPROVED);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
+        // NEW: notify user
+        notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.APPROVED);
 
-        EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
-        dto.setId(reg.getId());
-        return dto;
+        return modelMapper.map(reg, EventRegistrationDTO.class);
     }
 
     public EventRegistrationDTO markComplete(Long registrationId, String managerEmail) {
-        EventRegistration reg = registrationRepository.findById(registrationId)
-                .orElseThrow(() -> new RuntimeException("Registration not found"));
+        EventRegistration reg = registrationRepository.findById(registrationId).orElseThrow(() -> new RuntimeException("Registration not found"));
         reg.setStatus(RegistrationStatus.COMPLETED);
         reg.setCompletedAt(LocalDateTime.now());
-        reg.setUpdatedAt(LocalDateTime.now());
         registrationRepository.save(reg);
 
-        try {
-            notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.COMPLETED);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
+        // NEW: notify user
+        notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.COMPLETED);
 
-        EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
-        dto.setId(reg.getId());
-        return dto;
+        return modelMapper.map(reg, EventRegistrationDTO.class);
     }
 
     public EventRegistrationDTO cancelRegistration(Long registrationId, String email) {
-        EventRegistration reg = registrationRepository.findById(registrationId)
-                .orElseThrow(() -> new RuntimeException("Registration not found"));
-
-        User requester = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        // only owner of registration or admin/manager can cancel on behalf (business rule)
-        if (!reg.getUser().getId().equals(requester.getId())) {
-            throw new RuntimeException("Unauthorized");
-        }
-
-        // Prevent cancel after event started
-        Event event = reg.getEvent();
-        if (event.getStartDate() != null && !event.getStartDate().isAfter(java.time.LocalDateTime.now())) {
-            throw new RuntimeException("Không thể huỷ đăng ký sau khi sự kiện đã bắt đầu");
-        }
-
+        EventRegistration reg = registrationRepository.findById(registrationId).orElseThrow(() -> new RuntimeException("Registration not found"));
         reg.setStatus(RegistrationStatus.CANCELED);
         reg.setUpdatedAt(LocalDateTime.now());
         registrationRepository.save(reg);
 
-        try {
-            notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.CANCELED);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
+        // NEW: notify user (if owner or manager triggered)
+        notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.CANCELED);
 
-        EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
-        dto.setId(reg.getId());
-        return dto;
+        return modelMapper.map(reg, EventRegistrationDTO.class);
     }
 
     // Delete

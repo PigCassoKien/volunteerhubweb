@@ -4,6 +4,8 @@ import com.example.volunteerhub.dto.CommentDTO;
 import com.example.volunteerhub.entity.Comment;
 import com.example.volunteerhub.entity.Post;
 import com.example.volunteerhub.entity.User;
+import com.example.volunteerhub.entity.enums.RelatedType;
+import com.example.volunteerhub.entity.enums.UserRole;
 import com.example.volunteerhub.repository.CommentRepository;
 import com.example.volunteerhub.repository.PostRepository;
 import com.example.volunteerhub.repository.UserRepository;
@@ -32,6 +34,9 @@ public class CommentService {
 
     @Autowired
     private ModelMapper modelMapper;
+
+    @Autowired
+    private NotificationService notificationService;
 
     // Create
     public CommentDTO createComment(CommentDTO commentDTO, String email) {
@@ -63,6 +68,12 @@ public class CommentService {
 
         // save before mapping
         comment = commentRepository.save(comment);
+
+        // NEW: notify post owner (if not commenter)
+        Long postOwnerId = post.getUser().getId();
+        if (!postOwnerId.equals(user.getId())) {
+            notificationService.notifyComment(postOwnerId, post.getId(), RelatedType.POST, user.getId());
+        }
 
         CommentDTO dto = modelMapper.map(comment, CommentDTO.class);
         dto.setUserId(comment.getUser().getId());
@@ -101,30 +112,32 @@ public class CommentService {
     }
 
     public List<CommentDTO> getCommentsByPost(Long postId, String email) {
-        Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("Post not found"));
-
-        Long eventId = post.getEvent().getId();
-        User requester = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        boolean isManager = post.getEvent().getCreatedBy() != null && post.getEvent().getCreatedBy().getId().equals(requester.getId());
-        boolean isParticipant = registrationService.hasApproveRegistration(eventId, requester.getId());
-
-        if (!isManager && !isParticipant) {
-            throw new RuntimeException("Unauthorized to view comments");
+        Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Post not found"));
+        User requester;
+        if (email != null) requester = userRepository.findByEmail(email).orElse(null);
+        else {
+            requester = null;
         }
 
-        return commentRepository.findByPostId(postId).stream()
-                .map(c -> {
-                    CommentDTO dto = modelMapper.map(c, CommentDTO.class);
-                    dto.setUserId(c.getUser() != null ? c.getUser().getId() : null);
-                    dto.setUserFullName(c.getUser() != null ? c.getUser().getFullName() : null);
-                    dto.setParentCommentId(c.getParentComment() != null ? c.getParentComment().getId() : null);
-                    dto.setPostId(c.getPost() != null ? c.getPost().getId() : null);
-                    return dto;
-                })
-                .collect(Collectors.toList());
+        List<Comment> flat = commentRepository.findByPostId(postId);
+        // map and set canDelete: comment owner OR post owner OR event manager OR admin
+        List<CommentDTO> dtos = flat.stream().map(c -> {
+            CommentDTO dto = modelMapper.map(c, CommentDTO.class);
+            dto.setUserId(c.getUser().getId());
+            dto.setUserFullName(c.getUser().getFullName());
+            dto.setParentCommentId(c.getParentComment() != null ? c.getParentComment().getId() : null);
+            boolean canDelete = false;
+            if (requester != null) {
+                if (c.getUser() != null && c.getUser().getId().equals(requester.getId())) canDelete = true;
+                else if (post.getUser() != null && post.getUser().getId().equals(requester.getId())) canDelete = true; // post owner can delete any comment
+                else if (requester.getRole() == UserRole.ADMIN) canDelete = true;
+                else if (requester.getRole() == UserRole.EVENT_MANAGER && post.getEvent().getCreatedBy() != null
+                        && post.getEvent().getCreatedBy().getId().equals(requester.getId())) canDelete = true;
+            }
+            dto.setCanDelete(canDelete);
+            return dto;
+        }).collect(Collectors.toList());
+        return dtos;
     }
 
     // Update - only comment owner
@@ -152,23 +165,22 @@ public class CommentService {
         return dto;
     }
 
-    // Delete - comment owner OR post owner; delete children recursively
+    // Delete comment: only allowed to comment owner OR post owner OR event manager OR admin
     public void deleteComment(Long id, String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        Comment c = commentRepository.findById(id).orElseThrow(() -> new RuntimeException("Comment not found"));
+        Post post = c.getPost();
+        User requester = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
 
-        Comment comment = commentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Comment not found"));
+        boolean allowed = false;
+        if (c.getUser() != null && c.getUser().getId().equals(requester.getId())) allowed = true;
+        else if (post.getUser() != null && post.getUser().getId().equals(requester.getId())) allowed = true;
+        else if (requester.getRole() == UserRole.ADMIN) allowed = true;
+        else if (requester.getRole() == UserRole.EVENT_MANAGER && post.getEvent().getCreatedBy() != null
+                && post.getEvent().getCreatedBy().getId().equals(requester.getId())) allowed = true;
 
-        Long postOwnerId = comment.getPost().getUser().getId();
-        boolean isCommentOwner = comment.getUser().getId().equals(user.getId());
-        boolean isPostOwner = postOwnerId.equals(user.getId());
+        if (!allowed) throw new RuntimeException("Không có quyền xoá bình luận này");
 
-        if (!isCommentOwner && !isPostOwner) {
-            throw new RuntimeException("Unauthorized: only comment owner or post owner can delete");
-        }
-
-        deleteRecursively(comment);
+        deleteRecursively(c);
     }
 
     private void deleteRecursively(Comment comment) {

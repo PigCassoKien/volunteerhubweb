@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.*;
 
@@ -39,7 +40,8 @@ public class NotificationController {
 
     @GetMapping("/vapid-public-key")
     public ResponseEntity<Map<String, String>> getVapidPublicKey() {
-        return ResponseEntity.ok(Map.of("publicKey", vapidPublicKey));
+        String key = (vapidPublicKey == null) ? "" : vapidPublicKey;
+        return ResponseEntity.ok(Map.of("publicKey", key));
     }
 
     @PostMapping("/custom")
@@ -52,8 +54,13 @@ public class NotificationController {
             @Parameter(name = "Authorization", in = ParameterIn.HEADER, schema = @Schema(type = "string"), example = "Bearer <token>", required = true)
     })
     @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN')")
-    public ResponseEntity<Void> sendCustomNotification(@Valid @RequestBody CustomNotificationRequestDTO request, Authentication authentication) {
-        notificationService.sendCustomNotification(request, authentication.getName());
+    public ResponseEntity<Void> sendCustomNotification(@Valid @RequestBody CustomNotificationRequestDTO request,
+                                                       Authentication authentication) {
+        if (authentication == null) return ResponseEntity.status(401).build();
+        String email = (authentication.getPrincipal() instanceof UserDetails)
+                ? ((UserDetails) authentication.getPrincipal()).getUsername()
+                : authentication.getName();
+        notificationService.sendCustomNotification(request, email);
         return ResponseEntity.ok().build();
     }
 
@@ -71,19 +78,22 @@ public class NotificationController {
         return ResponseEntity.ok(notificationService.getNotificationById(id, authentication.getName()));
     }
 
-    @GetMapping
+    @GetMapping("")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<NotificationDTO>> listNotifications(Authentication authentication) {
+    public ResponseEntity<List<NotificationDTO>> getMyNotifications(Authentication authentication) {
+        if (authentication == null) return ResponseEntity.status(401).build();
         String email = authentication.getName();
         User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
         List<NotificationDTO> list = notificationService.getNotifications(user.getId());
         return ResponseEntity.ok(list);
     }
 
-    @PutMapping("/mark-as-read/{id}")
+    @PutMapping("/read/{id}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<NotificationDTO> markAsRead(@PathVariable Long id, Authentication authentication) {
-        NotificationDTO dto = notificationService.markAsRead(id, authentication.getName());
+        if (authentication == null) return ResponseEntity.status(401).build();
+        String email = authentication.getName();
+        NotificationDTO dto = notificationService.markAsRead(id, email);
         return ResponseEntity.ok(dto);
     }
 
@@ -109,5 +119,14 @@ public class NotificationController {
     public ResponseEntity<Void> deleteNotification(@PathVariable Long id, Authentication authentication) {
         notificationService.deleteNotification(id, authentication.getName());
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/event/{eventId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<NotificationDTO>> getNotificationsForEvent(@PathVariable Long eventId, Authentication authentication) {
+        if (authentication == null) return ResponseEntity.status(401).build();
+        String email = authentication.getName();
+        List<NotificationDTO> list = notificationService.getNotificationsForEvent(eventId, email);
+        return ResponseEntity.ok(list);
     }
 }

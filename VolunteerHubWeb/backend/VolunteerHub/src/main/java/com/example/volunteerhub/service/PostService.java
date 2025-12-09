@@ -1,30 +1,31 @@
 package com.example.volunteerhub.service;
 
+import com.example.volunteerhub.dto.PostDTO;
+import com.example.volunteerhub.entity.Comment;
+import com.example.volunteerhub.entity.Event;
+import com.example.volunteerhub.entity.Post;
+import com.example.volunteerhub.entity.User;
+import com.example.volunteerhub.entity.enums.PostStatus;
+import com.example.volunteerhub.entity.enums.UserRole;
+import com.example.volunteerhub.repository.CommentRepository;
+import com.example.volunteerhub.repository.EventRepository;
+import com.example.volunteerhub.repository.PostRepository;
+import com.example.volunteerhub.repository.ReactionRepository;
+import com.example.volunteerhub.repository.UserRepository;
+import jakarta.transaction.Transactional;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.example.volunteerhub.dto.PostDTO;
-import com.example.volunteerhub.entity.Event;
-import com.example.volunteerhub.entity.Post;
-import com.example.volunteerhub.entity.User;
-import com.example.volunteerhub.entity.enums.PostStatus;
-import com.example.volunteerhub.entity.enums.UserRole;
-import com.example.volunteerhub.repository.EventRepository;
-import com.example.volunteerhub.repository.PostRepository;
-import com.example.volunteerhub.repository.UserRepository;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 public class PostService {
@@ -44,18 +45,22 @@ public class PostService {
     @Autowired
     private EventRegistrationService registrationService;
 
+    @Autowired
+    private ReactionRepository reactionRepository;
+
+    @Autowired
+    private CommentRepository commentRepository;
+
     @Value("${upload.dir:uploads}")
     private String uploadDir;
 
     private Path getPostBaseDir() {
         try {
-            Path base = Path.of(uploadDir != null && !uploadDir.isBlank() ? uploadDir : "uploads")
-                    .toAbsolutePath().normalize()
-                    .resolve("post");
-            Files.createDirectories(base);
+            Path base = Path.of(uploadDir).toAbsolutePath().normalize();
+            if (!Files.exists(base)) Files.createDirectories(base);
             return base;
         } catch (Exception ex) {
-            throw new RuntimeException("Unable to prepare upload folder: " + ex.getMessage(), ex);
+            throw new RuntimeException("Cannot access upload dir", ex);
         }
     }
 
@@ -74,7 +79,7 @@ public class PostService {
         boolean isApprovedVolunteer = registrationService.hasApproveRegistration(event.getId(), user.getId());
 
         if (!isManagerOfEvent && !isApprovedVolunteer) {
-            throw new RuntimeException("Forbidden: only event manager or approved volunteers can post");
+            throw new RuntimeException("Không có quyền đăng bài trong kênh trao đổi này");
         }
 
         Post post = new Post();
@@ -82,237 +87,283 @@ public class PostService {
         post.setUser(user);
         post.setContent(postDTO.getContent());
         post.setMediaFiles(postDTO.getMediaFiles());
-        // Auto-approve if created by event manager, otherwise keep pending for manager approval
-        post.setStatus(isManagerOfEvent ? PostStatus.APPROVED : PostStatus.PENDING);
         post.setCreatedAt(LocalDateTime.now());
-        if (isManagerOfEvent) {
-            post.setUpdatedAt(LocalDateTime.now());
-        }
+
+        // Manager posts auto-approved
+        post.setStatus(isManagerOfEvent ? PostStatus.APPROVED : PostStatus.PENDING);
 
         post = postRepository.save(post);
-        PostDTO out = modelMapper.map(post, PostDTO.class);
-        out.setUserFullName(post.getUser() != null ? post.getUser().getFullName() : null);
-        out.setUserId(post.getUser() != null ? post.getUser().getId() : null);
-        return out;
+
+        PostDTO dto = modelMapper.map(post, PostDTO.class);
+        dto.setUserId(user.getId());
+        dto.setUserFullName(user.getFullName());
+        dto.setCanDelete(true); // creator can delete own post
+        return dto;
     }
 
-    // Read
+    // Read single post
     public PostDTO getPostById(Long id, String email) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Post not found"));
 
-        User requester = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User requester = (email == null)
+                ? null
+                : userRepository.findByEmail(email).orElse(null);
 
-        Event event = post.getEvent();
+        // nếu post chưa APPROVED thì chỉ cho: chủ bài, manager của event, hoặc ADMIN xem
+        if (post.getStatus() != PostStatus.APPROVED) {
+            if (requester == null) {
+                throw new RuntimeException("Post not available");
+            }
+            boolean isOwner = post.getUser() != null && post.getUser().getId().equals(requester.getId());
+            boolean isEventManager = post.getEvent() != null
+                    && post.getEvent().getCreatedBy() != null
+                    && post.getEvent().getCreatedBy().getId().equals(requester.getId());
+            boolean isAdmin = requester.getRole() == UserRole.ADMIN;
 
-        boolean isManagerOfEvent = requester.getRole() == UserRole.EVENT_MANAGER
-                && event.getCreatedBy() != null
-                && email.equals(event.getCreatedBy().getEmail());
-
-        boolean isApprovedVolunteer = registrationService.hasApproveRegistration(event.getId(), requester.getId());
-
-        if (!isManagerOfEvent && !isApprovedVolunteer) {
-            throw new RuntimeException("Forbidden: cannot view this post");
+            if (!isOwner && !isEventManager && !isAdmin) {
+                throw new RuntimeException("Post not available");
+            }
         }
 
-        return modelMapper.map(post, PostDTO.class);
+        PostDTO dto = modelMapper.map(post, PostDTO.class);
+        dto.setUserId(post.getUser() != null ? post.getUser().getId() : null);
+        dto.setUserFullName(post.getUser() != null ? post.getUser().getFullName() : null);
+
+        boolean canDelete = false;
+        if (requester != null) {
+            boolean isOwner = post.getUser() != null && post.getUser().getId().equals(requester.getId());
+            boolean isEventManager = post.getEvent() != null
+                    && post.getEvent().getCreatedBy() != null
+                    && post.getEvent().getCreatedBy().getId().equals(requester.getId());
+            boolean isAdmin = requester.getRole() == UserRole.ADMIN;
+            canDelete = isOwner || isEventManager || isAdmin;
+        }
+        dto.setCanDelete(canDelete);
+        return dto;
     }
 
-    public List<PostDTO> getPostsByEvent(Long eventId, String email) {
+    // Return posts visible to requester: APPROVED OR owner OR event manager or admin
+    public List<PostDTO> getPostsByEvent(Long eventId, String requesterEmail) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
 
-        User requester = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        boolean isManagerOfEvent = requester.getRole() == UserRole.EVENT_MANAGER
-                && event.getCreatedBy() != null
-                && email.equals(event.getCreatedBy().getEmail());
-
-        List<Post> posts = postRepository.findByEventId(eventId);
-
-        Stream<Post> stream = posts.stream();
-        if (!isManagerOfEvent) {
-            // show APPROVED posts for everyone + allow requester to see their own (even if PENDING)
-            stream = stream.filter(p -> p.getStatus() == PostStatus.APPROVED || (p.getUser() != null && p.getUser().getId().equals(requester.getId())));
+        User requester;
+        if (requesterEmail != null) {
+            requester = userRepository.findByEmail(requesterEmail).orElse(null);
+        } else {
+            requester = null;
         }
 
-        return stream
-                .sorted(Comparator.comparing(Post::getCreatedAt).reversed())
+        List<Post> all = postRepository.findByEventId(eventId);
+
+        return all.stream()
+                .filter(p -> {
+                    // luôn cho phép post đã APPROVED
+                    if (p.getStatus() == PostStatus.APPROVED) return true;
+
+                    // còn lại chỉ cho: chủ bài, manager của event, ADMIN
+                    if (requester == null) return false;
+
+                    boolean isOwner = p.getUser() != null && p.getUser().getId().equals(requester.getId());
+                    boolean isEventManager = event.getCreatedBy() != null
+                            && event.getCreatedBy().getId().equals(requester.getId());
+                    boolean isAdmin = requester.getRole() == UserRole.ADMIN;
+
+                    return isOwner || isEventManager || isAdmin;
+                })
+                .sorted(Comparator.comparing(
+                        Post::getCreatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())
+                ))
                 .map(p -> {
                     PostDTO dto = modelMapper.map(p, PostDTO.class);
-                    dto.setUserFullName(p.getUser() != null ? p.getUser().getFullName() : null);
                     dto.setUserId(p.getUser() != null ? p.getUser().getId() : null);
+                    dto.setUserFullName(p.getUser() != null ? p.getUser().getFullName() : null);
+
+                    boolean canDelete = false;
+                    if (requester != null) {
+                        boolean isOwner = p.getUser() != null && p.getUser().getId().equals(requester.getId());
+                        boolean isEventManager = event.getCreatedBy() != null
+                                && event.getCreatedBy().getId().equals(requester.getId());
+                        boolean isAdmin = requester.getRole() == UserRole.ADMIN;
+                        canDelete = isOwner || isEventManager || isAdmin;
+                    }
+                    dto.setCanDelete(canDelete);
                     return dto;
                 })
                 .collect(Collectors.toList());
     }
 
-    // Update
-    public PostDTO updatePost(Long id, PostDTO postDTO, String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        Post post = postRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Post not found"));
-
-        if (!post.getUser().getEmail().equals(email)) {
-            throw new RuntimeException("Unauthorized: only the author can update the post");
-        }
-
-        if (postDTO.getContent() != null) post.setContent(postDTO.getContent());
-        if (postDTO.getMediaFiles() != null) post.setMediaFiles(postDTO.getMediaFiles());
-
-        // After edit, mark pending for re-approval
-        post.setStatus(PostStatus.PENDING);
-        post.setUpdatedAt(LocalDateTime.now());
-
-        post = postRepository.save(post);
-        return modelMapper.map(post, PostDTO.class);
-    }
-
-    // Update multipart: append new uploaded files when provided (do not silently ignore)
+    // Update multipart: append new files and update content
     public PostDTO updatePostMultipart(Long postId, String content, MultipartFile[] mediaFiles, String email) {
         Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Post not found"));
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
-        boolean isManager = post.getEvent().getCreatedBy() != null && post.getEvent().getCreatedBy().getEmail().equals(email);
-        if (!isManager && !post.getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("Unauthorized");
-        }
+        User requester = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
+
+        // only owner or manager/admin can update
+        boolean allowed = (post.getUser() != null && post.getUser().getId().equals(requester.getId()))
+                || requester.getRole() == UserRole.ADMIN
+                || (requester.getRole() == UserRole.EVENT_MANAGER && post.getEvent().getCreatedBy() != null
+                    && post.getEvent().getCreatedBy().getId().equals(requester.getId()));
+        if (!allowed) throw new RuntimeException("Không có quyền cập nhật bài viết");
 
         if (content != null) post.setContent(content);
-
         if (mediaFiles != null && mediaFiles.length > 0) {
-            List<String> saved = new ArrayList<>();
-            Path base = getPostBaseDir();
-            for (MultipartFile f : mediaFiles) {
-                if (f == null || f.isEmpty()) continue;
-                String original = Path.of(f.getOriginalFilename()).getFileName().toString();
-                String filename = System.currentTimeMillis() + "_" + original.replaceAll("[^a-zA-Z0-9._-]", "_");
-                Path target = base.resolve(filename);
-                try {
-                    Files.copy(f.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-                    saved.add("post/" + filename);
-                } catch (Exception ex) {
-                    // continue with other files
+            // save files to upload dir and append names to post.mediaFiles
+            try {
+                Path base = getPostBaseDir();
+                for (MultipartFile mf : mediaFiles) {
+                    String fname = System.currentTimeMillis() + "_" + mf.getOriginalFilename();
+                    Path target = base.resolve(fname).normalize();
+                    Files.copy(mf.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+                    post.getMediaFiles().add(fname);
                 }
+            } catch (Exception ex) {
+                throw new RuntimeException("Lưu file thất bại: " + ex.getMessage());
             }
-            if (post.getMediaFiles() == null) post.setMediaFiles(new ArrayList<>());
-            post.getMediaFiles().addAll(saved); // append new files
         }
-
         post.setUpdatedAt(LocalDateTime.now());
         post = postRepository.save(post);
-
         PostDTO dto = modelMapper.map(post, PostDTO.class);
-        dto.setUserFullName(post.getUser() != null ? post.getUser().getFullName() : null);
         dto.setUserId(post.getUser() != null ? post.getUser().getId() : null);
+        dto.setUserFullName(post.getUser() != null ? post.getUser().getFullName() : null);
+        // compute canDelete for requester: owner/manager/admin
+        boolean canDelete = false;
+        if (requester != null) {
+            if (post.getUser() != null && post.getUser().getId().equals(requester.getId())) canDelete = true;
+            else if (requester.getRole() == UserRole.ADMIN) canDelete = true;
+            else if (requester.getRole() == UserRole.EVENT_MANAGER && post.getEvent().getCreatedBy() != null
+                    && post.getEvent().getCreatedBy().getId().equals(requester.getId())) canDelete = true;
+        }
+        dto.setCanDelete(canDelete);
         return dto;
     }
 
-    // Delete single media file from a post (remove DB entry + delete physical file)
-    public PostDTO deletePostMedia(Long postId, String filePath, String email) {
-        Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Post not found"));
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
-        boolean isManager = post.getEvent().getCreatedBy() != null && post.getEvent().getCreatedBy().getEmail().equals(email);
-        if (!isManager && !post.getUser().getId().equals(user.getId())) {
+    // Delete post
+    @Transactional
+    public void deletePost(Long postId, String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Post not found"));
+
+        boolean isOwner = post.getUser() != null && post.getUser().getId().equals(user.getId());
+        boolean isEventManager = post.getEvent() != null
+                && post.getEvent().getCreatedBy() != null
+                && post.getEvent().getCreatedBy().getId().equals(user.getId());
+        boolean isAdmin = user.getRole() == UserRole.ADMIN;
+
+        if (!isOwner && !isEventManager && !isAdmin) {
             throw new RuntimeException("Unauthorized");
         }
 
-        if (filePath == null || filePath.isBlank()) throw new RuntimeException("File path required");
-
-        // normalize stored path (expect "post/filename.ext")
-        String normalized = filePath.replace("\\", "/");
-        if (post.getMediaFiles() != null && post.getMediaFiles().removeIf(s -> s.equals(normalized))) {
-            // delete physical file
-            try {
-                Path base = getPostBaseDir();
-                // filePath may be "post/filename"
-                String filename = normalized.contains("/") ? normalized.substring(normalized.indexOf("/") + 1) : normalized;
-                Path target = base.resolve(filename);
-                Files.deleteIfExists(target);
-            } catch (Exception ex) {
-                // log and continue
-            }
-            post = postRepository.save(post);
-            PostDTO dto = modelMapper.map(post, PostDTO.class);
-            dto.setUserFullName(post.getUser() != null ? post.getUser().getFullName() : null);
-            dto.setUserId(post.getUser() != null ? post.getUser().getId() : null);
-            return dto;
-        } else {
-            throw new RuntimeException("File not found in post");
-        }
-    }
-
-    // Delete post: delete files from disk then remove DB row
-    public void deletePost(Long id, String email) {
-        Post post = postRepository.findById(id).orElseThrow(() -> new RuntimeException("Post not found"));
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
-        boolean isManager = post.getEvent().getCreatedBy() != null && post.getEvent().getCreatedBy().getEmail().equals(email);
-        if (!isManager && !post.getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("Unauthorized");
+        // 1) Xóa reaction trên các comment của post
+        List<Comment> comments = commentRepository.findByPostId(postId);
+        for (Comment c : comments) {
+            reactionRepository.deleteByCommentId(c.getId());
         }
 
-        // delete files
-        if (post.getMediaFiles() != null && !post.getMediaFiles().isEmpty()) {
-            Path base = getPostBaseDir();
-            for (String mf : new ArrayList<>(post.getMediaFiles())) {
-                try {
-                    String filename = mf.contains("/") ? mf.substring(mf.indexOf("/") + 1) : mf;
-                    Files.deleteIfExists(base.resolve(filename));
-                } catch (Exception ex) {
-                    // continue
-                }
-            }
+        // 2) Xóa reaction trực tiếp trên post
+        reactionRepository.deleteByPostId(postId);
+
+        // 3) Xóa comment
+        if (!comments.isEmpty()) {
+            commentRepository.deleteAll(comments);
         }
 
+        // 4) Cuối cùng xóa post
         postRepository.delete(post);
     }
 
     public PostDTO approvePost(Long postId, String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Post not found"));
 
         Event event = post.getEvent();
 
-        if (user.getRole() != UserRole.EVENT_MANAGER
-                || event.getCreatedBy() == null
-                || !email.equals(event.getCreatedBy().getEmail())) {
-            throw new RuntimeException("Unauthorized: only event manager can approve posts");
+        User requester = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        boolean isManagerOfEvent = requester.getRole() == UserRole.EVENT_MANAGER
+                && event.getCreatedBy() != null
+                && requester.getId().equals(event.getCreatedBy().getId());
+        boolean isAdmin = requester.getRole() == UserRole.ADMIN;
+
+        if (!isManagerOfEvent && !isAdmin) {
+            throw new RuntimeException("Unauthorized");
         }
 
         post.setStatus(PostStatus.APPROVED);
-        post.setUpdatedAt(LocalDateTime.now());
-        post = postRepository.save(post);
+        postRepository.save(post);
 
-        // optional: notify author about approval
-        // notificationService.notifyPostStatusChange(post.getUser().getId(), postId, PostStatus.APPROVED);
-
-        return modelMapper.map(post, PostDTO.class);
+        PostDTO dto = modelMapper.map(post, PostDTO.class);
+        dto.setUserId(post.getUser() != null ? post.getUser().getId() : null);
+        dto.setUserFullName(post.getUser() != null ? post.getUser().getFullName() : null);
+        dto.setCanDelete(true);
+        return dto;
     }
 
-    // Reject post (set status = REJECTED) - only manager of event or admin
     public PostDTO rejectPost(Long postId, String email) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Post not found"));
-        User user = userRepository.findByEmail(email)
+
+        Event event = post.getEvent();
+
+        User requester = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        boolean isManagerOfEvent = user.getRole() == UserRole.EVENT_MANAGER
-                && post.getEvent().getCreatedBy() != null
-                && post.getEvent().getCreatedBy().getEmail().equals(email);
-        boolean isAdmin = user.getRole() == UserRole.ADMIN;
+        boolean isManagerOfEvent = requester.getRole() == UserRole.EVENT_MANAGER
+                && event.getCreatedBy() != null
+                && requester.getId().equals(event.getCreatedBy().getId());
+        boolean isAdmin = requester.getRole() == UserRole.ADMIN;
 
         if (!isManagerOfEvent && !isAdmin) {
             throw new RuntimeException("Unauthorized");
         }
 
         post.setStatus(PostStatus.REJECTED);
-        post = postRepository.save(post);
-        return modelMapper.map(post, PostDTO.class);
+        postRepository.save(post);
+
+        PostDTO dto = modelMapper.map(post, PostDTO.class);
+        dto.setUserId(post.getUser() != null ? post.getUser().getId() : null);
+        dto.setUserFullName(post.getUser() != null ? post.getUser().getFullName() : null);
+        dto.setCanDelete(false);
+        return dto;
+    }
+
+    // Delete single media file from a post (called by controller)
+    public PostDTO deletePostMedia(Long postId, String mediaPath, String email) {
+        Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Post not found"));
+        User requester = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
+
+        boolean allowed = false;
+        if (post.getUser() != null && post.getUser().getId().equals(requester.getId())) allowed = true;
+        else if (requester.getRole() == UserRole.ADMIN) allowed = true;
+        else if (requester.getRole() == UserRole.EVENT_MANAGER && post.getEvent().getCreatedBy() != null
+                && post.getEvent().getCreatedBy().getId().equals(requester.getId())) allowed = true;
+
+        if (!allowed) throw new RuntimeException("Không có quyền xoá media của bài viết");
+
+        if (post.getMediaFiles() == null || !post.getMediaFiles().contains(mediaPath)) {
+            throw new RuntimeException("Media không tồn tại trong bài viết");
+        }
+
+        // remove from list and persist
+        post.getMediaFiles().removeIf(m -> m.equals(mediaPath));
+        postRepository.save(post);
+
+        // attempt to delete physical file if stored locally
+        try {
+            Path base = getPostBaseDir();
+            Path target = base.resolve(mediaPath).normalize();
+            if (Files.exists(target)) {
+                Files.delete(target);
+            }
+        } catch (Exception ex) {
+            // ignore deletion errors but log
+            System.err.println("[PostService] Failed to delete media file: " + ex.getMessage());
+        }
+        return null;
     }
 }

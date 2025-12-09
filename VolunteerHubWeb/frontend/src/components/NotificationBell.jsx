@@ -38,12 +38,14 @@ export default function NotificationBell({ user, token }) {
   // Đánh dấu tất cả đã đọc
   const markAllAsRead = async () => {
     try {
-      await api.put("/notifications/mark-all-read");
+      // backend hiện có endpoint per-notification: PUT /notifications/read/{id}
+      const unread = notifications.filter((n) => !n.isRead);
+      await Promise.all(unread.map((n) => api.put(`/notifications/read/${n.id}`)));
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnread(0);
     } catch (err) {
-      // ignore server error, still update UI optimistically
+      console.error(err);
     }
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    setUnread(0);
   };
 
   // Xóa thông báo
@@ -58,65 +60,63 @@ export default function NotificationBell({ user, token }) {
 
   // Khi bấm một thông báo: mark as read (optimistic), reduce unread, điều hướng tới resource
   const handleClickNotification = async (notif) => {
-    if (!notif) return;
-    // optimistic UI update
+    // optimistic mark-read UI
     if (!notif.isRead) {
-      setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n)));
-      setUnread((u) => Math.max(0, u - 1));
-    }
-
-    // try server-side mark-as-read (fallbacks allowed)
-    try {
-      // preferred endpoint
-      await api.put(`/notifications/mark-as-read/${notif.id}`);
-    } catch (err) {
-      // fallback: try fetch/get to ensure server side sees it
+      setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
+      setUnread(c => Math.max(0, c - 1));
       try {
-        await api.get(`/notifications/get/${notif.id}`);
-      } catch (_) {
-        // ignore
+        await api.put(`/notifications/read/${notif.id}`);
+      } catch (err) {
+        // revert on failure
+        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: false } : n));
+        setUnread(c => c + 1);
+        if (err?.response?.status === 403) {
+          alert("Phiên đã hết hạn hoặc không có quyền. Vui lòng đăng nhập lại.");
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          navigate("/login");
+          return;
+        }
       }
     }
 
     // navigate depending on relatedType
     try {
-      const type = notif.relatedType;
-      const id = notif.relatedId;
-      if (type === "EVENT" && id) {
-        navigate(`/events/${id}`);
+      if (notif.relatedType === "EVENT" && notif.relatedId) {
+        navigate(`/events/${notif.relatedId}`);
         return;
       }
-      if (type === "POST" && id) {
-        // fetch post to get eventId
+
+      if (notif.relatedType === "POST" && notif.relatedId) {
         try {
-          const { data: post } = await api.get(`/posts/get/${id}`);
-          if (post && post.eventId) {
-            navigate(`/events/${post.eventId}?postId=${id}`);
+          const res = await api.get(`/posts/get/${notif.relatedId}`);
+          const post = res.data;
+          const eventId = post?.eventId;
+          if (eventId) {
+            navigate(`/events/${eventId}?postId=${notif.relatedId}`);
             return;
           }
-        } catch (err) {
-          // ignore and try generic fallback
-        }
+        } catch (_) {}
       }
-      if (type === "COMMENT" && id) {
+
+      if (notif.relatedType === "COMMENT" && notif.relatedId) {
         try {
-          const { data: comment } = await api.get(`/comments/get/${id}`);
-          if (comment && comment.postId) {
-            const { data: post } = await api.get(`/posts/get/${comment.postId}`);
-            if (post && post.eventId) {
-              navigate(`/events/${post.eventId}?postId=${post.id}&commentId=${id}`);
+          const cres = await api.get(`/comments/get/${notif.relatedId}`);
+          const comment = cres.data;
+          const postId = comment?.postId;
+          if (postId) {
+            const pres = await api.get(`/posts/get/${postId}`);
+            const post = pres.data;
+            const eventId = post?.eventId;
+            if (eventId) {
+              navigate(`/events/${eventId}?postId=${postId}&commentId=${notif.relatedId}`);
               return;
             }
           }
-        } catch (err) {
-          // ignore
-        }
+        } catch (_) {}
       }
-    } catch (err) {
-      console.error("Navigate error:", err);
-    }
+    } catch (_) {}
 
-    // default fallback
     navigate("/");
   };
 

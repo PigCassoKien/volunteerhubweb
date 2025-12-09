@@ -18,4 +18,7 @@ public interface ReactionRepository extends JpaRepository<Reaction, Long> {
     // new helpers
     Optional<Reaction> findByPostIdAndUserId(Long postId, Long userId);
     Optional<Reaction> findByCommentIdAndUserId(Long commentId, Long userId);
+
+    void deleteByPostId(Long postId);
+    void deleteByCommentId(Long commentId);
 }

@@ -16,4 +16,10 @@ public class PostDTO {
     private List<String> mediaFiles;
     private PostStatus status;
     private LocalDateTime createdAt;
+
+    // Bài viết có phải thông báo (announcement) không
+    private Boolean announcement;
+
+    // client helper: whether current requester can delete this post
+    private Boolean canDelete;
 }

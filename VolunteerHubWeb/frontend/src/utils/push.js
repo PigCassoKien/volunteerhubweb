@@ -43,9 +43,10 @@ export async function initPush() {
         applicationServerKey: urlBase64ToUint8Array(publicKey)
       });
 
+    console.log("[push] registration ok, subscription:", subscription && subscription.toJSON());
+
     if (subscription) {
       const subJson = subscription.toJSON();
-      // ensure keys exist (some browsers/modes may omit keys)
       const payload = {
         endpoint: subJson.endpoint,
         publicKey: subJson.keys?.p256dh || "",
@@ -53,7 +54,8 @@ export async function initPush() {
       };
 
       try {
-        await axios.post('/subscriptions/save', payload);
+        const saved = await axios.post('/subscriptions/save', payload);
+        console.log("[push] saved subscription response:", saved?.data);
       } catch (saveErr) {
         console.error("Failed to save push subscription:", saveErr?.response?.data || saveErr);
       }

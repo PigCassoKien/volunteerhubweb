@@ -5,9 +5,13 @@ import com.example.volunteerhub.dto.EventDTO;
 import com.example.volunteerhub.dto.PostDTO;
 import com.example.volunteerhub.entity.Event;
 import com.example.volunteerhub.entity.Post;
+import com.example.volunteerhub.entity.User;
 import com.example.volunteerhub.entity.enums.EventStatus;
+import com.example.volunteerhub.entity.enums.UserRole;
 import com.example.volunteerhub.repository.EventRepository;
 import com.example.volunteerhub.repository.PostRepository;
+import com.example.volunteerhub.repository.UserRepository;
+import com.example.volunteerhub.repository.EventRegistrationRepository;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -25,6 +29,12 @@ public class DashboardService {
 
     @Autowired
     private PostRepository postRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private EventRegistrationRepository registrationRepository;
 
     @Autowired
     private ModelMapper modelMapper;
@@ -77,6 +87,28 @@ public class DashboardService {
                 .limit(10)
                 .map(post -> modelMapper.map(post, PostDTO.class))
                 .collect(Collectors.toList()));
+
+        // Metrics
+        long totalEvents = eventRepository.count();
+        long totalUsers = userRepository.count();
+        long totalVolunteers = userRepository.findByRole(UserRole.VOLUNTEER).size();
+        long totalManagers = userRepository.findByRole(UserRole.EVENT_MANAGER).size();
+        long totalRegistrations = registrationRepository.count();
+        long totalApprovedRegistrations = registrationRepository.findByStatus(com.example.volunteerhub.entity.enums.RegistrationStatus.APPROVED).size();
+
+        LocalDateTime now = LocalDateTime.now();
+        int activeLast7 = (int) userRepository.findAll().stream()
+                .filter(u -> u.getLastLoginAt() != null && u.getLastLoginAt().isAfter(now.minusDays(7)))
+                .count();
+
+        dashboard.setTotalEvents((int) totalEvents);
+        dashboard.setTotalUsers((int) totalUsers);
+        dashboard.setTotalVolunteers((int) totalVolunteers);
+        dashboard.setTotalManagers((int) totalManagers);
+        dashboard.setTotalRegistrations((int) totalRegistrations);
+        dashboard.setTotalApprovedRegistrations((int) totalApprovedRegistrations);
+        dashboard.setActiveUsersLast7Days(activeLast7);
+        dashboard.setSiteVisits(0L); // placeholder: integrate analytics later
 
         return dashboard;
     }

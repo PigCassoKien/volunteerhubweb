@@ -35,19 +35,21 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/api/users/register",
+                                "/api/notifications/vapid-public-key", // <- allow frontend to fetch VAPID key without auth
                                 "/api/otp/verify",
                                 "/api/otp/generate",
                                 "/api/users/reset-password",
                                 "/api/events/all",
                                 "/api/events/get/**",
-                                "/api/users/**",
                                 "/api/registrations/count/**",
                                 "/uploads/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
-
+                        
+                        // user endpoints are protected by method-level @PreAuthorize where appropriate
+                        
                         .requestMatchers("/api/events/manage/**")
                         .hasAnyRole("EVENT_MANAGER", "ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")

@@ -58,7 +58,7 @@ public class CommentController {
     })
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<CommentDTO>> getCommentsByPost(@PathVariable Long postId, Authentication authentication) {
-        String email = authentication.getName();
+        String email = authentication == null ? null : authentication.getName();
         return ResponseEntity.ok(commentService.getCommentsByPost(postId, email));
     }
 

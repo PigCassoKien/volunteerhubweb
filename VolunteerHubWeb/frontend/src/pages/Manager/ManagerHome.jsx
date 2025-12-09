@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "../../api/axios";
-import EventListManager from "./EventListManager";
+import { useNavigate } from "react-router-dom";
+import EventCard from "../../components/EventCard";
 import CategoryManager from "./CategoryManager";
 import RegistrationsManager from "./RegistrationsManager";
 import EventEditor from "./EventEditor";
@@ -11,6 +12,7 @@ export default function ManagerHome() {
   const [editingEvent, setEditingEvent] = useState(null);
   const [events, setEvents] = useState([]);
   const [stats, setStats] = useState({ newEvents: 0, trending: 0, posts: 0 });
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadMyEvents();
@@ -39,6 +41,17 @@ export default function ManagerHome() {
     }
   };
 
+  // Xóa sự kiện của manager (giống EventListManager)
+  const handleDelete = async (id) => {
+    if (!confirm("Xóa sự kiện?")) return;
+    try {
+      await axios.delete(`/events/delete/${id}`);
+      loadMyEvents();
+    } catch (err) {
+      alert(err.response?.data?.message || "Xóa thất bại");
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
@@ -56,6 +69,7 @@ export default function ManagerHome() {
         </div>
       </div>
 
+      {/* Ô thống kê – giữ nguyên như mini dashboard */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-white p-4 rounded shadow">
           <div className="text-sm text-gray-500">Sự kiện mới</div>
@@ -71,12 +85,59 @@ export default function ManagerHome() {
         </div>
       </div>
 
-      <EventListManager
-        events={events}
-        onEdit={(ev) => { setEditingEvent(ev); setShowEditor(true); }}
-        onRefresh={loadMyEvents}
-      />
+      {/* DANH SÁCH SỰ KIỆN CỦA MANAGER – dạng grid EventCard giống dashboard */}
+      <div className="bg-white p-4 rounded shadow mb-6">
+        <h3 className="font-semibold mb-3">Sự kiện của bạn</h3>
 
+        {!events.length ? (
+          <div className="text-center text-gray-500">
+            Bạn chưa có sự kiện nào. Hãy tạo sự kiện mới.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {events.map((ev) => (
+              <div key={ev.id} className="relative">
+                <EventCard
+                  event={ev}
+                  isFavorited={false}
+                  onToggleFavorite={() => {}}
+                />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">{ev.status}</span>
+                    <span className="ml-2 text-gray-400">
+                      · {ev.registeredCount ?? 0} đăng ký
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => navigate(`/manager/events/${ev.id}`)}
+                      className="px-3 py-1 border rounded text-sm hover:bg-gray-50"
+                    >
+                      Chi tiết
+                    </button>
+                    <button
+                      onClick={() => { setEditingEvent(ev); setShowEditor(true); }}
+                      className="px-3 py-1 border rounded text-sm hover:bg-gray-50"
+                    >
+                      Sửa
+                    </button>
+                    <button
+                      onClick={() => handleDelete(ev.id)}
+                      className="px-3 py-1 border text-red-600 rounded text-sm hover:bg-red-50"
+                    >
+                      Xóa
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Khối Danh mục & Báo cáo/Đăng ký – giữ nguyên */}
       <div className="mt-10 grid grid-cols-2 gap-6">
         <div className="bg-white p-4 rounded shadow">
           <h3 className="font-semibold mb-3">Quản lý danh mục</h3>
@@ -85,7 +146,9 @@ export default function ManagerHome() {
 
         <div className="bg-white p-4 rounded shadow">
           <h3 className="font-semibold mb-3">Báo cáo & đăng ký</h3>
-          <p className="text-sm text-gray-500">Chọn một sự kiện để quản lý đăng ký / xuất dữ liệu.</p>
+          <p className="text-sm text-gray-500">
+            Chọn một sự kiện để quản lý đăng ký / xuất dữ liệu.
+          </p>
           <RegistrationsManager events={events} />
         </div>
       </div>

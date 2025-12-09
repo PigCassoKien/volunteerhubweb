@@ -2,15 +2,9 @@ package com.example.volunteerhub.service;
 
 import com.example.volunteerhub.dto.CustomNotificationRequestDTO;
 import com.example.volunteerhub.dto.NotificationDTO;
-import com.example.volunteerhub.entity.Event;
-import com.example.volunteerhub.entity.EventRegistration;
-import com.example.volunteerhub.entity.Notification;
-import com.example.volunteerhub.entity.User;
+import com.example.volunteerhub.entity.*;
 import com.example.volunteerhub.entity.enums.*;
-import com.example.volunteerhub.repository.EventRegistrationRepository;
-import com.example.volunteerhub.repository.EventRepository;
-import com.example.volunteerhub.repository.NotificationRepository;
-import com.example.volunteerhub.repository.UserRepository;
+import com.example.volunteerhub.repository.*;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
 import org.modelmapper.ModelMapper;
@@ -20,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,234 +33,241 @@ public class NotificationService {
     private EventRepository eventRepository;
 
     @Autowired
+    private PostRepository postRepository;
+
+    @Autowired
     private ModelMapper modelMapper;
 
     @Autowired
     private WebPushNotificationService webPushNotificationService; // <- ensure available
 
-    // Create
-    public void notifyPostStatusChange(Long userId, Long postId, PostStatus status) {
-        Notification notification = new Notification();
-        notification.setUser(userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found")));
-        notification.setType(NotificationType.POST_REACTION);
-        notification.setContent("Your post has been " + status.name().toLowerCase());
-        notification.setRelatedId(postId);
-        notification.setRelatedType(RelatedType.POST);
-        notification.setIsRead(false);
-        notification.setCreatedAt(LocalDateTime.now());
-        notificationRepository.save(notification);
-        sendWebPushNotification(notification);
-    }
-
-    public void notifyNewEvent(Long eventId) {
-        List<User> volunteers = userRepository.findByRole(UserRole.VOLUNTEER);
-        for (User user : volunteers) {
-            Notification notification = new Notification();
-            notification.setUser(user);
-            notification.setType(NotificationType.EVENT_UPDATE);
-            notification.setContent("A new event has been added!");
-            notification.setRelatedId(eventId);
-            notification.setRelatedType(RelatedType.EVENT);
-            notification.setIsRead(false);
-            notification.setCreatedAt(LocalDateTime.now());
-            notificationRepository.save(notification);
-            sendWebPushNotification(notification);
-        }
-    }
-
-    // Send custom notification to all APPROVED participants of an event
-    public void sendCustomNotification(CustomNotificationRequestDTO request, String email) {
-        if (request == null || request.getEventId() == null) {
-            throw new RuntimeException("Invalid request");
+    // Send custom notification (manager -> all APPROVED registrants of event)
+    public void sendCustomNotification(CustomNotificationRequestDTO request, String senderEmail) {
+        if (request.getEventId() == null || request.getContent() == null || request.getContent().isBlank()) {
+            throw new RuntimeException("Missing eventId or content");
         }
 
-        User sender = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
-        Event event = eventRepository.findById(request.getEventId()).orElseThrow(() -> new RuntimeException("Event not found"));
+        Event event = eventRepository.findById(request.getEventId())
+                .orElseThrow(() -> new RuntimeException("Event not found"));
 
-        // only event owner (manager) or admin can send
-        boolean isManagerOfEvent = sender.getRole() == UserRole.EVENT_MANAGER
-                && event.getCreatedBy() != null
-                && sender.getId().equals(event.getCreatedBy().getId());
-        boolean isAdmin = sender.getRole() == UserRole.ADMIN;
+        String title = "Thông báo sự kiện: " + event.getTitle();
+        String body = request.getContent();
+        String url = "/events/" + event.getId();
 
-        if (!isManagerOfEvent && !isAdmin) {
-            throw new RuntimeException("Unauthorized");
-        }
+        // lấy tất cả người đã APPROVED cho event
+        List<EventRegistration> regs = registrationRepository.findByEventIdAndStatus(event.getId(), RegistrationStatus.APPROVED);
+        List<Long> recipientUserIds = regs.stream()
+                .map(r -> r.getUser().getId())
+                .distinct()
+                .collect(Collectors.toList());
 
-        // get approved registrations
-        List<EventRegistration> approved = registrationRepository.findByEventIdAndStatus(event.getId(), RegistrationStatus.APPROVED);
-        if (approved == null || approved.isEmpty()) return;
-
-        LocalDateTime now = LocalDateTime.now();
-
-        // create notifications for each user and send web-push
-        for (EventRegistration reg : approved) {
-            User u = reg.getUser();
-            if (u == null) continue;
-
-            Notification n = new Notification();
-            n.setUser(u);
-            n.setType(NotificationType.EVENT_UPDATE);
-            n.setContent(request.getContent() != null ? request.getContent() : ("Thông báo sự kiện: " + event.getTitle()));
-            n.setRelatedId(event.getId());
-            n.setRelatedType(RelatedType.EVENT);
-            n.setIsRead(false);
-            n.setCreatedAt(now);
-            notificationRepository.save(n);
-
-            // send web push with link to event detail
-            String url = "/events/" + event.getId();
+        // gửi tới từng người nhận: lưu Notification + gửi webpush
+        for (Long uid : recipientUserIds) {
             try {
-                webPushNotificationService.sendNotificationToUser(u.getId(),
-                        "Thông báo sự kiện: " + event.getTitle(),
-                        n.getContent(),
-                        url);
-            } catch (Exception ex) {
-                // log & continue
-                ex.printStackTrace();
+                Notification notif = new Notification();
+                notif.setUser(userRepository.findById(uid).orElse(null));
+                notif.setContent(body);
+                notif.setCreatedAt(LocalDateTime.now());
+                notif.setIsRead(false);
+                notif.setType(NotificationType.EVENT_UPDATE);
+                notif.setRelatedId(event.getId());
+                notif.setRelatedType(RelatedType.EVENT);
+                notificationRepository.save(notif);
+            } catch (Exception e) {
+                // ignore persistence error per recipient
             }
+            try {
+                webPushNotificationService.sendNotificationToUser(uid, title, body, url);
+            } catch (Exception ex) {
+                System.err.println("[WebPush] sendCustomNotification -> send failed for userId=" + uid + " : " + ex.getMessage());
+            }
+        }
+
+        // nếu yêu cầu, gửi thêm tới người gửi (preview)
+        if (Boolean.TRUE.equals(request.getIncludeSender())) {
+            User sender = userRepository.findByEmail(senderEmail).orElse(null);
+            if (sender != null) {
+                try {
+                    Notification notif = new Notification();
+                    notif.setUser(sender);
+                    notif.setContent(body);
+                    notif.setCreatedAt(LocalDateTime.now());
+                    notif.setIsRead(false);
+                    notif.setType(NotificationType.EVENT_UPDATE);
+                    notif.setRelatedId(event.getId());
+                    notif.setRelatedType(RelatedType.EVENT);
+                    notificationRepository.save(notif);
+                } catch (Exception e) { /* ignore */ }
+                try {
+                    webPushNotificationService.sendNotificationToUser(sender.getId(), title, body, url);
+                } catch (Exception ex) {
+                    System.err.println("[WebPush] sendCustomNotification -> send failed for sender userId=" + (sender==null?null:sender.getId()) + " : " + ex.getMessage());
+                }
+            }
+        }
+    }
+
+    // Notify registration status change to the specific user
+    public void notifyRegistrationStatusChange(Long userId, Long eventId, RegistrationStatus status) {
+        User u = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        Event e = eventRepository.findById(eventId).orElseThrow(() -> new RuntimeException("Event not found"));
+        String verb;
+        switch (status) {
+            case APPROVED: verb = "đã được duyệt"; break;
+            case REJECTED: verb = "bị từ chối"; break;
+            case COMPLETED: verb = "đã hoàn thành"; break;
+            case CANCELED: verb = "đã bị huỷ"; break;
+            default: verb = status.name();
+        }
+        String content = String.format("Đăng ký của bạn cho sự kiện \"%s\" %s.", e.getTitle(), verb);
+        Notification notif = new Notification();
+        notif.setUser(u);
+        notif.setType(NotificationType.EVENT_REGISTRATION);
+        notif.setContent(content);
+        notif.setCreatedAt(LocalDateTime.now());
+        notif.setRelatedId(e.getId());
+        notif.setRelatedType(RelatedType.EVENT);
+        notificationRepository.save(notif);
+
+        try {
+            webPushNotificationService.sendNotificationToUser(u.getId(), "Trạng thái đăng ký", content, "/events/" + e.getId());
+        } catch (Exception ex) {
+            System.err.println("[Notification] webpush error: " + ex.getMessage());
+        }
+    }
+
+    // Notify when new event is approved -> send to ALL users (webpush + optional entity per user)
+    public void notifyNewEvent(Long eventId) {
+        Event e = eventRepository.findById(eventId).orElseThrow(() -> new RuntimeException("Event not found"));
+        String title = "Sự kiện mới: " + e.getTitle();
+        String body = "Sự kiện đã được duyệt. Xem chi tiết và tham gia ngay!";
+        // attempt webpush to all subscriptions
+        try {
+            webPushNotificationService.sendNotificationToAll(title, body, "/events/" + e.getId());
+        } catch (Exception ex) {
+            System.err.println("[Notification] broadcast webpush failed: " + ex.getMessage());
+        }
+
+        // Persist per-user Notification records (optional): create for active users only to avoid huge insert
+        List<User> users = userRepository.findAll();
+        for (User u : users) {
+            Notification notif = new Notification();
+            notif.setUser(u);
+            notif.setType(NotificationType.EVENT_UPDATE);
+            notif.setContent(body);
+            notif.setCreatedAt(LocalDateTime.now());
+            notif.setRelatedId(e.getId());
+            notif.setRelatedType(RelatedType.EVENT);
+            notificationRepository.save(notif);
+        }
+    }
+
+    // Notify recipient that someone reacted to their post/comment.
+    public void notifyReaction(Long recipientUserId, Long relatedId, RelatedType relatedType, ReactionType reactionType) {
+        notifyReaction(recipientUserId, relatedId, relatedType, reactionType, null);
+    }
+
+    // Overload: include actorUserId
+    public void notifyReaction(Long recipientUserId, Long relatedId, RelatedType relatedType, ReactionType reactionType, Long actorUserId) {
+        User recipient = userRepository.findById(recipientUserId).orElseThrow(() -> new RuntimeException("User not found"));
+        String actorName = null;
+        if (actorUserId != null) {
+            actorName = userRepository.findById(actorUserId).map(User::getFullName).orElse(null);
+        }
+        String target = relatedType == RelatedType.POST ? "bài viết của bạn" : "bình luận của bạn";
+        String content = (actorName != null ? actorName : "Ai đó") + " đã phản ứng (" + reactionType + ") với " + target + ".";
+        Notification notif = new Notification();
+        notif.setUser(recipient);
+        notif.setType(NotificationType.POST_REACTION);
+        notif.setContent(content);
+        notif.setCreatedAt(LocalDateTime.now());
+        notif.setRelatedId(relatedId);
+        notif.setRelatedType(relatedType);
+        notif.setActorId(actorUserId);
+        notif.setActorName(actorName);
+        notificationRepository.save(notif);
+
+        try {
+            webPushNotificationService.sendNotificationToUser(recipient.getId(), "Phản ứng mới", content, "/");
+        } catch (Exception ex) {
+            System.err.println("[Notification] webpush error: " + ex.getMessage());
+        }
+    }
+
+    // Notify comment: someone commented on your post/comment
+    public void notifyComment(Long recipientUserId, Long relatedId, RelatedType relatedType, Long actorUserId) {
+        User recipient = userRepository.findById(recipientUserId).orElseThrow(() -> new RuntimeException("User not found"));
+        String actorName = null;
+        if (actorUserId != null) {
+            actorName = userRepository.findById(actorUserId).map(User::getFullName).orElse(null);
+        }
+        String target = relatedType == RelatedType.POST ? "bài viết của bạn" : "bình luận của bạn";
+        String content = (actorName != null ? actorName : "Ai đó") + " đã bình luận vào " + target + ".";
+        Notification notif = new Notification();
+        notif.setUser(recipient);
+        notif.setType(NotificationType.COMMENT);
+        notif.setContent(content);
+        notif.setCreatedAt(LocalDateTime.now());
+        notif.setRelatedId(relatedId);
+        notif.setRelatedType(relatedType);
+        notif.setActorId(actorUserId);
+        notif.setActorName(actorName);
+        notificationRepository.save(notif);
+        try {
+            webPushNotificationService.sendNotificationToUser(recipient.getId(), "Bình luận mới", content, "/");
+        } catch (Exception ex) {
+            System.err.println("[Notification] webpush error: " + ex.getMessage());
         }
     }
 
     // Read single notification
     public NotificationDTO getNotificationById(Long id, String email) {
-        Notification n = notificationRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Notification not found"));
-        if (n.getUser() == null) throw new RuntimeException("Invalid notification");
-        User req = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
-        if (!n.getUser().getId().equals(req.getId())) {
-            throw new RuntimeException("Unauthorized");
-        }
-        NotificationDTO dto = modelMapper.map(n, NotificationDTO.class);
-        dto.setUserId(n.getUser().getId());
-        return dto;
+        Notification n = notificationRepository.findById(id).orElseThrow(() -> new RuntimeException("Notification not found"));
+        if (!n.getUser().getEmail().equals(email)) throw new RuntimeException("Unauthorized");
+        return modelMapper.map(n, NotificationDTO.class);
     }
 
     // List notifications for a user (newest first)
     public List<NotificationDTO> getNotifications(Long userId) {
-        List<Notification> list = notificationRepository.findAll().stream()
-                .filter(n -> n.getUser() != null && n.getUser().getId().equals(userId))
+        List<Notification> list = notificationRepository.findByUserId(userId);
+        return list.stream()
                 .sorted(Comparator.comparing(Notification::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(n -> modelMapper.map(n, NotificationDTO.class))
                 .collect(Collectors.toList());
+    }
 
-        return list.stream().map(n -> {
-            NotificationDTO dto = modelMapper.map(n, NotificationDTO.class);
-            dto.setUserId(n.getUser().getId());
-            return dto;
-        }).collect(Collectors.toList());
+    // Return notifications for a user filtered by event
+    public List<NotificationDTO> getNotificationsForEvent(Long eventId, String email) {
+        User u = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
+        return notificationRepository.findByUserId(u.getId()).stream()
+                .filter(n -> n.getRelatedType() == RelatedType.EVENT && n.getRelatedId() != null && n.getRelatedId().equals(eventId))
+                .sorted(Comparator.comparing(Notification::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(n -> modelMapper.map(n, NotificationDTO.class))
+                .collect(Collectors.toList());
     }
 
     // Mark a single notification as read (only owner)
     public NotificationDTO markAsRead(Long id, String email) {
-        Notification n = notificationRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Notification not found"));
-        User req = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
-        if (!n.getUser().getId().equals(req.getId())) {
-            throw new RuntimeException("Unauthorized");
-        }
-        if (Boolean.FALSE.equals(n.getIsRead())) {
-            n.setIsRead(true);
-            notificationRepository.save(n);
-        }
-        NotificationDTO dto = modelMapper.map(n, NotificationDTO.class);
-        dto.setUserId(n.getUser().getId());
-        return dto;
+        Notification n = notificationRepository.findById(id).orElseThrow(() -> new RuntimeException("Notification not found"));
+        if (!n.getUser().getEmail().equals(email)) throw new RuntimeException("Unauthorized");
+        n.setIsRead(true);
+        notificationRepository.save(n);
+        return modelMapper.map(n, NotificationDTO.class);
     }
 
     // Mark all notifications for user as read
     public void markAllAsRead(Long userId) {
-        // try to use repo helper if available
-        List<Notification> unread = notificationRepository.findByUserIdAndIsRead(userId, false);
-        if (unread == null || unread.isEmpty()) return;
-        unread.forEach(n -> n.setIsRead(true));
-        notificationRepository.saveAll(unread);
+        List<Notification> list = notificationRepository.findByUserId(userId);
+        for (Notification n : list) {
+            n.setIsRead(true);
+        }
+        notificationRepository.saveAll(list);
     }
 
     // Delete notification (owner only)
     public void deleteNotification(Long id, String email) {
-        Notification n = notificationRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Notification not found"));
-        User req = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
-        if (!n.getUser().getId().equals(req.getId())) {
-            throw new RuntimeException("Unauthorized");
-        }
-        notificationRepository.deleteById(id);
+        Notification n = notificationRepository.findById(id).orElseThrow(() -> new RuntimeException("Notification not found"));
+        if (!n.getUser().getEmail().equals(email)) throw new RuntimeException("Unauthorized");
+        notificationRepository.delete(n);
     }
-
-    private void sendWebPushNotification(Notification notification) {
-        String subscriptionId = notification.getUser().getSubscriptionId();
-        if (subscriptionId != null) {
-            Message message = Message.builder()
-                    .putData("title", "New Notification")
-                    .putData("body", notification.getContent())
-                    .setToken(subscriptionId)
-                    .build();
-            try {
-                FirebaseMessaging.getInstance().send(message);
-            } catch (Exception e) {
-                // Log error
-            }
-        }
-    }
-    // Java
-    public void notifyReaction(Long userId, Long relatedId, RelatedType relatedType, com.example.volunteerhub.entity.enums.ReactionType reactionType) {
-        Notification notification = new Notification();
-        notification.setUser(userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found")));
-        notification.setType(NotificationType.POST_REACTION);
-        notification.setContent("Your " + relatedType.name().toLowerCase() + " received a " + reactionType.name().toLowerCase() + " reaction.");
-        notification.setRelatedId(relatedId);
-        notification.setRelatedType(relatedType);
-        notification.setIsRead(false);
-        notification.setCreatedAt(java.time.LocalDateTime.now());
-        notificationRepository.save(notification);
-        sendWebPushNotification(notification);
-    }
-
-    // Notify single user about registration status change and send webpush
-    public void notifyRegistrationStatusChange(Long userId, Long eventId, RegistrationStatus status) {
-        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
-        Event event = eventRepository.findById(eventId).orElse(null);
-
-        String title = "Cập nhật đăng ký";
-        String body;
-        switch (status) {
-            case APPROVED:
-                body = "Bạn đã được xác nhận tham gia sự kiện" + (event != null ? " \"" + event.getTitle() + "\"" : "");
-                break;
-            case REJECTED:
-                body = "Đăng ký của bạn cho sự kiện" + (event != null ? " \"" + event.getTitle() + "\"" : "") + " đã bị từ chối.";
-                break;
-            case CANCELED:
-                body = "Đăng ký cho sự kiện" + (event != null ? " \"" + event.getTitle() + "\"" : "") + " đã bị hủy.";
-                break;
-            case COMPLETED:
-                body = "Chúc mừng! Bạn đã hoàn thành sự kiện" + (event != null ? " \"" + event.getTitle() + "\"" : "") + ".";
-                break;
-            case PENDING:
-            default:
-                body = "Trạng thái đăng ký của bạn cho sự kiện" + (event != null ? " \"" + event.getTitle() + "\"" : "") + " là: " + status.name();
-        }
-
-        Notification n = new Notification();
-        n.setUser(user);
-        n.setType(NotificationType.EVENT_REGISTRATION);
-        n.setContent(body);
-        n.setIsRead(false);
-        n.setCreatedAt(LocalDateTime.now());
-        n.setRelatedId(eventId);
-        n.setRelatedType(RelatedType.EVENT);
-        notificationRepository.save(n);
-
-        // try to send webpush (sw.js will open URL when clicking)
-        try {
-            String url = event != null ? ("/events/" + event.getId()) : "/";
-            webPushNotificationService.sendNotificationToUser(userId, title, body, url);
-        } catch (Exception ex) {
-            // log but don't fail workflow
-            ex.printStackTrace();
-        }
-    }
-
 }

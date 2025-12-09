@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.*;
 
@@ -49,22 +50,37 @@ public class UserController {
     }, parameters = {
             @Parameter(name = "Authorization", in = ParameterIn.HEADER, schema = @Schema(type = "string"), example = "Bearer <token>", required = true)
     })
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN') or authentication.principal.email == #currentUserEmail")
-    public ResponseEntity<UserResponseDTO> getUserById(@PathVariable Long id, @RequestHeader("Authorization") String currentUserEmail) {
-        return ResponseEntity.ok(userService.getUserById(id, currentUserEmail));
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<UserResponseDTO> getUserById(@PathVariable Long id, Authentication authentication) {
+        if (authentication == null) return ResponseEntity.status(401).build();
+        String currentUserEmail = authentication.getName();
+        try {
+            UserResponseDTO dto = userService.getUserById(id, currentUserEmail);
+            return ResponseEntity.ok(dto);
+        } catch (org.springframework.security.access.AccessDeniedException ade) {
+            return ResponseEntity.status(403).build();
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(404).build();
+        }
     }
 
-    @GetMapping("/admin/all")
-    @Operation(summary = "Get all accounts information", responses = {
-            @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserResponseDTO.class))),
-            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
-    }, parameters = {
-            @Parameter(name = "Authorization", in = ParameterIn.HEADER, schema = @Schema(type = "string"), example = "Bearer <token>", required = true)
-    })
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN')")
-    public ResponseEntity<List<UserResponseDTO>> getAllUsers(@RequestHeader("Authorization") String currentUserEmail) {
-        return ResponseEntity.ok(userService.getAllUsers(currentUserEmail));
+    @GetMapping("/all")
+    // keep method-level protection but also validate inside to return proper status codes
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<UserResponseDTO>> getAllUsers(Authentication authentication) {
+        if (authentication == null) {
+            return ResponseEntity.status(401).build();
+        }
+        String email = authentication.getName();
+        try {
+            List<UserResponseDTO> list = userService.getAllUsers(email);
+            return ResponseEntity.ok(list);
+        } catch (org.springframework.security.access.AccessDeniedException ade) {
+            return ResponseEntity.status(403).build();
+        } catch (RuntimeException ex) {
+            // log kept by GlobalExceptionHandler as well — return 500 for unexpected
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @PostMapping("/search-volunteers")
@@ -99,19 +115,13 @@ public class UserController {
         return ResponseEntity.ok(userService.updateUser(id, userDTO, currentUserEmail));
     }
 
-    @PutMapping("/assign-role")
-    @Operation(summary = "Assign role to user", responses = {
-            @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserResponseDTO.class))),
-            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
-    }, parameters = {
-            @Parameter(name = "Authorization", in = ParameterIn.HEADER, schema = @Schema(type = "string"), example = "Bearer <token>", required = true)
-    })
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN')")
-    public ResponseEntity<UserResponseDTO> assignRole(@Valid @RequestBody AssignRoleRequestDTO request, @RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : authHeader;
-        String adminEmail = jwtService.extractClaims(token).getSubject();
-        return ResponseEntity.ok(userService.assignRole(request, adminEmail));
+    @PostMapping("/assign-role")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserResponseDTO> assignRole(@RequestBody AssignRoleRequestDTO request, Authentication authentication) {
+        if (authentication == null) return ResponseEntity.status(401).build();
+        String adminEmail = authentication.getName();
+        UserResponseDTO dto = userService.assignRole(request, adminEmail);
+        return ResponseEntity.ok(dto);
     }
 
     @PutMapping("/lock/{id}")
