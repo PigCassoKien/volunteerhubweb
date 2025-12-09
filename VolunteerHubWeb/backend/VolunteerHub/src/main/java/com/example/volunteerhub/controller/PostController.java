@@ -93,13 +93,9 @@ public class PostController {
     }
 
     @GetMapping("/event/{eventId}")
-    @Operation(summary = "Get posts by event", responses = {
-            @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PostDTO.class))),
-            @ApiResponse(responseCode = "404", description = "Not Found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
-    })
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<PostDTO>> getPostsByEvent(@PathVariable Long eventId, Authentication authentication) {
-        String email = authentication.getName();
+        String email = authentication == null ? null : authentication.getName();
         return ResponseEntity.ok(postService.getPostsByEvent(eventId, email));
     }
 
@@ -115,7 +111,31 @@ public class PostController {
         return ResponseEntity.ok(dto);
     }
 
-    // New: delete one media from a post
+    @DeleteMapping("/delete/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> deletePost(@PathVariable Long id, Authentication authentication) {
+        String email = authentication.getName();
+        postService.deletePost(id, email);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/approve/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER','ROLE_ADMIN')")
+    public ResponseEntity<PostDTO> approvePost(@PathVariable Long id, Authentication authentication) {
+        String email = authentication.getName();
+        PostDTO dto = postService.approvePost(id, email);
+        return ResponseEntity.ok(dto);
+    }
+
+    @PutMapping("/reject/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER','ROLE_ADMIN')")
+    public ResponseEntity<PostDTO> rejectPost(@PathVariable Long id, Authentication authentication) {
+        String email = authentication.getName();
+        PostDTO dto = postService.rejectPost(id, email);
+        return ResponseEntity.ok(dto);
+    }
+
+    // New: delete one media from a post (called by controller)
     @DeleteMapping("/{postId}/media")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PostDTO> deletePostMedia(
@@ -125,27 +145,6 @@ public class PostController {
     ) {
         String email = authentication.getName();
         PostDTO dto = postService.deletePostMedia(postId, filePath, email);
-        return ResponseEntity.ok(dto);
-    }
-
-    @DeleteMapping("/delete/{id}")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Void> deletePost(@PathVariable Long id, Authentication authentication) {
-        postService.deletePost(id, authentication.getName());
-        return ResponseEntity.ok().build();
-    }
-
-    @PutMapping("/approve/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER','ROLE_ADMIN')")
-    public ResponseEntity<PostDTO> approvePost(@PathVariable Long id, Authentication authentication) {
-        PostDTO dto = postService.approvePost(id, authentication.getName());
-        return ResponseEntity.ok(dto);
-    }
-
-    @PutMapping("/reject/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER','ROLE_ADMIN')")
-    public ResponseEntity<PostDTO> rejectPost(@PathVariable Long id, Authentication authentication) {
-        PostDTO dto = postService.rejectPost(id, authentication.getName());
         return ResponseEntity.ok(dto);
     }
 }

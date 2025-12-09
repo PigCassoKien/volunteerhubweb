@@ -12,7 +12,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
+import java.security.PublicKey;
 import java.security.Security;
+import java.util.Base64;
 import java.util.List;
 
 @Service
@@ -35,57 +37,82 @@ public class WebPushNotificationService {
         Security.addProvider(new BouncyCastleProvider());
     }
 
-    // send with explicit url (recommended)
     public void sendNotificationToUser(Long userId, String title, String body, String url) {
         List<PushSubscription> subscriptions = subscriptionRepository.findAllByUserId(userId);
+        System.out.println("[WebPush] sendNotificationToUser userId=" + userId + " subs=" + (subscriptions == null ? 0 : subscriptions.size()) + " title=" + title);
+        if (subscriptions == null || subscriptions.isEmpty()) return;
         for (PushSubscription subscription : subscriptions) {
             try {
                 sendPush(subscription, title, body, url);
             } catch (Exception e) {
-                e.printStackTrace();
+                System.err.println("[WebPush] sendNotificationToUser -> sendPush failed for endpoint=" + subscription.getEndpoint() + " : " + e.getMessage());
             }
         }
-    }
-
-    // legacy compatibility: no url
-    public void sendNotificationToUser(Long userId, String title, String body) {
-        sendNotificationToUser(userId, title, body, "/");
     }
 
     public void sendNotificationToAll(String title, String body, String url) {
         List<PushSubscription> subscriptions = subscriptionRepository.findAll();
-        for (PushSubscription subscription : subscriptions) {
+        System.out.println("[WebPush] sendNotificationToAll subs=" + (subscriptions == null ? 0 : subscriptions.size()) + " title=" + title);
+        if (subscriptions == null || subscriptions.isEmpty()) return;
+        for (PushSubscription s : subscriptions) {
             try {
-                sendPush(subscription, title, body, url);
+                sendPush(s, title, body, url);
             } catch (Exception e) {
-                e.printStackTrace();
+                System.err.println("[WebPush] sendNotificationToAll -> sendPush failed for endpoint=" + s.getEndpoint() + " : " + e.getMessage());
             }
         }
     }
 
-    // legacy compatibility
-    public void sendNotificationToAll(String title, String body) {
-        sendNotificationToAll(title, body, "/");
-    }
-
     private void sendPush(PushSubscription subscription, String title, String body, String url) throws Exception {
-        // include url in payload so sw.js can open correct page on click
+        if (subscription == null) throw new IllegalArgumentException("subscription null");
+        if (subscription.getEndpoint() == null || subscription.getEndpoint().isBlank()) {
+            System.out.println("[WebPush] skip - endpoint empty");
+            return;
+        }
+        if (subscription.getPublicKey() == null || subscription.getPublicKey().isBlank()
+                || subscription.getAuthKey() == null || subscription.getAuthKey().isBlank()) {
+            System.out.println("[WebPush] skip - missing keys for endpoint=" + subscription.getEndpoint());
+            return;
+        }
+
         String payload = String.format("{\"title\":\"%s\",\"body\":\"%s\",\"url\":\"%s\"}",
                 escapeJson(title), escapeJson(body), escapeJson(url == null ? "/" : url));
+        int ttl = 60;
+        System.out.println("[WebPush] preparing -> endpoint=" + subscription.getEndpoint()
+                + " p256dh_len=" + subscription.getPublicKey().length()
+                + " auth_len=" + subscription.getAuthKey().length()
+                + " payload=" + payload + " ttl=" + ttl);
 
-        Notification notification = new Notification(
-                subscription.getEndpoint(),
-                subscription.getPublicKey(),
-                subscription.getAuthKey(),
-                payload.getBytes(StandardCharsets.UTF_8)
-        );
+        // Build Notification
+        PublicKey userPublicKey = Utils.loadPublicKey(subscription.getPublicKey());
+        byte[] userAuth = Base64.getUrlDecoder().decode(subscription.getAuthKey());
+        byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
+
+        Notification notification = new Notification(subscription.getEndpoint(), userPublicKey, userAuth, payloadBytes, ttl);
 
         PushService pushService = new PushService();
-        pushService.setPublicKey(Utils.loadPublicKey(publicKey.trim()));
-        pushService.setPrivateKey(Utils.loadPrivateKey(privateKey.trim()));
+        // set VAPID keys
+        pushService.setPublicKey(Utils.loadPublicKey(publicKey));
+        pushService.setPrivateKey(Utils.loadPrivateKey(privateKey));
         pushService.setSubject(subject);
 
-        pushService.send(notification);
+        try {
+            pushService.send(notification);
+            System.out.println("[WebPush] sent -> endpoint=" + subscription.getEndpoint());
+        } catch (Exception ex) {
+            System.err.println("[WebPush] send FAILED -> endpoint=" + subscription.getEndpoint() + " : " + ex.getMessage());
+            // if the endpoint is gone (410) remove subscription to avoid repeated errors
+            String msg = ex.getMessage() == null ? "" : ex.getMessage();
+            if (msg.contains("410") || msg.toLowerCase().contains("gone") || msg.toLowerCase().contains("not found")) {
+                try {
+                    subscriptionRepository.deleteById(subscription.getId());
+                    System.out.println("[WebPush] deleted stale subscription id=" + subscription.getId());
+                } catch (Exception e2) {
+                    System.err.println("[WebPush] failed to delete stale subscription id=" + subscription.getId() + " : " + e2.getMessage());
+                }
+            }
+            throw ex;
+        }
     }
 
     private String escapeJson(String s) {

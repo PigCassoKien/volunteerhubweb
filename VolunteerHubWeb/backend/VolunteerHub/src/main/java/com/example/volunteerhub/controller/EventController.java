@@ -2,6 +2,7 @@ package com.example.volunteerhub.controller;
 
 import com.example.volunteerhub.dto.EventDTO;
 import com.example.volunteerhub.dto.EventSocialDTO;
+import com.example.volunteerhub.entity.Category;
 import com.example.volunteerhub.service.EventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -57,6 +58,7 @@ public class EventController {
             @RequestParam("startDate") String startDate,
             @RequestParam("endDate") String endDate,
             @RequestParam(value = "categoryId", required = false) Long categoryId,
+            @RequestParam(value = "maxParticipants", required = false) Integer maxParticipants,
             @RequestParam(value = "imageFile", required = false) MultipartFile imageFile,
             Authentication authentication
     ) throws Exception {
@@ -70,35 +72,31 @@ public class EventController {
                 throw new RuntimeException("Không thể đọc ngày bắt đầu/ket thúc. Định dạng hợp lệ: yyyy-MM-dd'T'HH:mm[:ss] hoặc ISO_OFFSET_DATE_TIME.");
             }
 
+            // build DTO to pass to service (reuse EventDTO)
             EventDTO dto = new EventDTO();
             dto.setTitle(title);
             dto.setDescription(description);
             dto.setLocation(location);
-            dto.setStartDate(startDt);
-            dto.setEndDate(endDt);
+            // parse startDate / endDate using same helper as other endpoints (expecting ISO datetime)
+            dto.setStartDate(LocalDateTime.parse(startDate));
+            dto.setEndDate(LocalDateTime.parse(endDate));
+            dto.setCategory(categoryId == null ? null : new Category() {{ setId(categoryId); }});
+            dto.setMaxParticipants(maxParticipants);
 
-            if (categoryId != null) {
-                com.example.volunteerhub.entity.Category c = new com.example.volunteerhub.entity.Category();
-                c.setId(categoryId);
-                dto.setCategory(c);
-            }
-
-            // save image file if provided under uploadDir/events
+            // handle image save similar to previous impl (store file -> dto.setImageFile(...))
             if (imageFile != null && !imageFile.isEmpty()) {
-                Path baseRoot = (eventUploadDir != null && !eventUploadDir.isBlank())
-                        ? Path.of(eventUploadDir).toAbsolutePath().normalize()
-                        : Path.of(uploadDir).toAbsolutePath().normalize();
-                Path baseDir = baseRoot.resolve("events");
-                Files.createDirectories(baseDir);
-                String original = Path.of(imageFile.getOriginalFilename()).getFileName().toString();
-                String filename = System.currentTimeMillis() + "_" + original.replaceAll("[^a-zA-Z0-9._-]", "_");
-                Path target = baseDir.resolve(filename);
-                Files.copy(imageFile.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+                Path dest = Path.of(uploadDir).toAbsolutePath().resolve("events");
+                Files.createDirectories(dest);
+                String filename = System.currentTimeMillis() + "-" + imageFile.getOriginalFilename();
+                Files.copy(imageFile.getInputStream(), dest.resolve(filename), StandardCopyOption.REPLACE_EXISTING);
                 dto.setImageFile("events/" + filename);
-                System.out.println("[EventController] saved event image -> " + target.toAbsolutePath());
             }
 
-            EventDTO created = eventService.createEvent(dto, authentication.getName());
+            String email = (authentication.getPrincipal() instanceof UserDetails)
+                    ? ((UserDetails) authentication.getPrincipal()).getUsername()
+                    : authentication.getName();
+
+            EventDTO created = eventService.createEvent(dto, email);
             return ResponseEntity.ok(created);
         } catch (DateTimeParseException dtp) {
             throw new RuntimeException("Ngày không hợp lệ: " + dtp.getMessage());

@@ -33,4 +33,8 @@ public class Notification {
 
     @Enumerated(EnumType.STRING)
     private RelatedType relatedType;
+
+    // NEW: who performed the action (reacted / commented / manager)
+    private Long actorId;
+    private String actorName;
 }

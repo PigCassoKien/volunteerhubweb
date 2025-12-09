@@ -3,10 +3,13 @@ package com.example.volunteerhub.service;
 import com.example.volunteerhub.dto.EventDTO;
 import com.example.volunteerhub.dto.EventSocialDTO;
 import com.example.volunteerhub.entity.Event;
+import com.example.volunteerhub.entity.Post;
 import com.example.volunteerhub.entity.User;
 import com.example.volunteerhub.entity.enums.EventStatus;
+import com.example.volunteerhub.entity.enums.PostStatus;
 import com.example.volunteerhub.entity.enums.UserRole;
 import com.example.volunteerhub.repository.EventRepository;
+import com.example.volunteerhub.repository.PostRepository;
 import com.example.volunteerhub.repository.UserRepository;
 import com.example.volunteerhub.repository.EventRegistrationRepository;
 import com.example.volunteerhub.entity.EventRegistration;
@@ -25,6 +28,9 @@ public class EventService {
 
     @Autowired
     private EventRepository eventRepository;
+
+    @Autowired
+    private PostRepository postRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -48,8 +54,11 @@ public class EventService {
         event.setCreatedBy(createdBy);
         event.setStatus(EventStatus.PENDING);
         event.setCreatedAt(LocalDateTime.now());
+        // ensure maxParticipants from DTO is persisted (can be null)
+        if (eventDTO.getMaxParticipants() != null) {
+            event.setMaxParticipants(eventDTO.getMaxParticipants());
+        }
         event = eventRepository.save(event);
-        notificationService.notifyNewEvent(event.getId());
         return modelMapper.map(event, EventDTO.class);
     }
 
@@ -140,17 +149,26 @@ public class EventService {
     }
 
     public EventDTO approveEvent(Long eventId, String adminEmail) {
-        User user = userRepository.findByEmail(adminEmail)
-                .orElseThrow(() -> new RuntimeException("Admin not found"));
-        if (user.getRole() != UserRole.ADMIN) {
-            throw new RuntimeException("Unauthorized");
-        }
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
+
+        // avoid re-sending if already approved
+        if (event.getStatus() == EventStatus.APPROVED) {
+            return mapEventToDTOWithExtras(event);
+        }
+
         event.setStatus(EventStatus.APPROVED);
         event.setUpdatedAt(LocalDateTime.now());
         event = eventRepository.save(event);
-        return modelMapper.map(event, EventDTO.class);
+
+        // send web-push + create Notification entities for approved event
+        try {
+            notificationService.notifyNewEvent(event.getId());
+        } catch (Exception ex) {
+            System.err.println("[EventService] notifyNewEvent failed for eventId=" + event.getId() + " : " + ex.getMessage());
+        }
+
+        return mapEventToDTOWithExtras(event);
     }
 
     public boolean canAccessEventSocial(Long eventId,String email) {

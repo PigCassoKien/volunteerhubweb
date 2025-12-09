@@ -20,6 +20,7 @@ import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.security.core.userdetails.UserDetails;
 
 @RestController
 @RequestMapping("/api/registrations")
@@ -62,11 +63,13 @@ public class EventRegistrationController {
     }
 
     @GetMapping("/event/{eventId}")
-    @Operation(summary = "Get registrations for an event (manager)")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<EventRegistrationDTO>> getByEvent(@PathVariable Long eventId, Authentication authentication) {
-        String email = authentication.getName();
-        return ResponseEntity.ok(registrationService.getRegistrationsByEvent(eventId, email));
+    public ResponseEntity<List<EventRegistrationDTO>> getRegistrationsByEvent(@PathVariable Long eventId, Authentication authentication) {
+        String email = (authentication.getPrincipal() instanceof UserDetails)
+                ? ((UserDetails) authentication.getPrincipal()).getUsername()
+                : authentication.getName();
+        List<EventRegistrationDTO> list = registrationService.getRegistrationsByEvent(eventId, email);
+        return ResponseEntity.ok(list);
     }
 
     // Read

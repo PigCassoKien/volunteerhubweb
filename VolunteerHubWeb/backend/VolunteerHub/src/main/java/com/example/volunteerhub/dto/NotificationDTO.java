@@ -16,4 +16,6 @@ public class NotificationDTO {
     private LocalDateTime createdAt;
     private Long relatedId;
     private RelatedType relatedType;
+    private Long actorId;
+    private String actorName;
 }

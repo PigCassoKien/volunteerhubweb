@@ -98,9 +98,13 @@ public class ReactionService {
                 r.setPost(post);
                 r.setReactionType(reactionDTO.getReactionType());
                 r.setCreatedAt(LocalDateTime.now());
-                r = reactionRepository.save(r);
-                // notify post owner (optional)
-                notificationService.notifyReaction(post.getUser().getId(), post.getId(), RelatedType.POST, r.getReactionType());
+                // after creating/saving reaction (for post)
+                Reaction saved = reactionRepository.save(r);
+                // notify recipient
+                Long recipientUserId = post.getUser().getId();
+                if (!recipientUserId.equals(user.getId())) {
+                    notificationService.notifyReaction(recipientUserId, post.getId(), RelatedType.POST, saved.getReactionType(), user.getId());
+                }
                 return modelMapper.map(r, ReactionDTO.class);
             }
         }

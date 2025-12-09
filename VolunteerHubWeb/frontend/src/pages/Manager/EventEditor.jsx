@@ -94,53 +94,31 @@ export default function EventEditor({ event, onClose, onSaved }) {
 
   const onSubmit = async (data) => {
     try {
-      // prepare dates in backend-friendly format
-      let start, end;
-      try {
-        start = formatForBackend(data.startDate);
-        end = formatForBackend(data.endDate);
-      } catch (err) {
-        return alert("Định dạng ngày không hợp lệ. Vui lòng chọn lại ngày/giờ.");
+      // prepare multipart payload including maxParticipants
+      const form = new FormData();
+      form.append("title", data.title);
+      form.append("description", data.description);
+      form.append("location", data.location);
+      form.append("startDate", formatForBackend(data.startDate));
+      form.append("endDate", formatForBackend(data.endDate));
+      if (data.categoryId) form.append("categoryId", data.categoryId);
+      // only append maxParticipants when user filled it (avoid sending empty string)
+      if (data.maxParticipants !== "" && data.maxParticipants != null) {
+        form.append("maxParticipants", Number(data.maxParticipants));
       }
-
-      // maxParticipants normalization
-      const maxP = data.maxParticipants ? parseInt(data.maxParticipants, 10) : null;
-
       if (imageFile) {
-        const form = new FormData();
-        form.append("title", data.title);
-        form.append("description", data.description);
-        form.append("location", data.location);
-        form.append("startDate", start);
-        form.append("endDate", end);
-        if (data.categoryId) form.append("categoryId", data.categoryId);
-        if (maxP !== null) form.append("maxParticipants", String(maxP));
         form.append("imageFile", imageFile);
-
-        if (event && event.id) {
-          await axios.put(`/events/update/${event.id}`, form); // backend handles multipart
-        } else {
-          await axios.post("/events/create", form);
-        }
-      } else {
-        const payload = {
-          title: data.title,
-          description: data.description,
-          location: data.location,
-          startDate: start,
-          endDate: end,
-          maxParticipants: maxP,
-        };
-        if (data.categoryId) payload.category = { id: Number(data.categoryId) };
-
-        if (event && event.id) {
-          await axios.put(`/events/update/${event.id}`, payload);
-        } else {
-          await axios.post("/events/create", payload);
-        }
       }
 
-      onSaved?.();
+      try {
+        const res = await axios.post("/events/create", form, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        onSaved?.(res.data);
+      } catch (err) {
+        console.error("create event failed", err);
+        throw err;
+      }
     } catch (err) {
       alert(err.response?.data?.message || "Lưu sự kiện thất bại");
     }

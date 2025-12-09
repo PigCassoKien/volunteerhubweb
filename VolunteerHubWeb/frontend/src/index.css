@@ -18,3 +18,8 @@
 .animate-fadeIn {
   animation: fadeIn 0.15s ease-out;
 }
+
+input, textarea, select {
+  direction: ltr !important;
+  /* unicode-bidi removed to avoid mirrored / reversed input from IME/contentEditable */
+}

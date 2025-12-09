@@ -14,4 +14,7 @@ public class CommentDTO {
     private String content;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    // client helper: whether current requester can delete this comment
+    private Boolean canDelete;
 }

@@ -1,8 +1,8 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { FiMail, FiLock } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
-import { FaFacebook } from "react-icons/fa6";
+import { FaFacebook } from "react-icons/fa";
 import axios from "../../api/axios";
 
 export default function Login() {
@@ -22,30 +22,26 @@ export default function Login() {
 
     try {
       const { data } = await axios.post("/auth/login", { email, password });
+      // data should be AuthenticationResponse { token, user }
+      const token = data?.token;
+      const user = data?.user;
+      if (!token || !user) throw new Error("Invalid response from server");
 
-      // store token + user
-      localStorage.setItem("token", data.token);
-      if (data.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+
+      // redirect based on role
+      const role = (user.role || "").toUpperCase();
+      if (role === "ADMIN") {
+        navigate("/admin");
+      } else if (role === "EVENT_MANAGER") {
+        navigate("/manager");
+      } else {
+        navigate("/");
       }
-
-      // notify app about auth change
-      window.dispatchEvent(new Event("auth-changed"));
-
-      // redirect: event managers go to manager dashboard immediately
-      if (data.user?.role === "EVENT_MANAGER") {
-        navigate("/manager", { replace: true });
-        return;
-      }
-
-      // default redirect after login
-      navigate("/", { replace: true });
-
-      alert("Đăng nhập thành công! Chào mừng trở lại ❤️");
-
-      setTimeout(() => {}, 100);
     } catch (err) {
-      alert(err.response?.data?.message || "Email hoặc mật khẩu không đúng");
+      console.error("Login failed", err);
+      alert(err.response?.data?.message || "Đăng nhập thất bại");
     } finally {
       setLoading(false);
     }

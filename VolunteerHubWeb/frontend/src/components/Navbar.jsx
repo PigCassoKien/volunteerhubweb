@@ -215,6 +215,17 @@ function Navbar() {
                       </li>
                     )}
 
+                    {user?.role === "ADMIN" && (
+                      <li>
+                        <button
+                          onClick={() => { setOpen(false); navigate("/admin"); }}
+                          className="flex items-center gap-2 hover:text-green-600 w-full text-left"
+                        >
+                          <i className="fa-solid fa-gear text-green-600"></i> Quản lý chung
+                        </button>
+                      </li>
+                    )}
+
                     <li>
                       <button
                         onClick={handleLogout}
