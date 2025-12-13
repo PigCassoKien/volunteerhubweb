@@ -12,7 +12,7 @@ const schema = yup.object({
   location: yup.string().required("Địa điểm là bắt buộc"),
   startDate: yup.string().required("Ngày bắt đầu là bắt buộc"),
   endDate: yup.string().required("Ngày kết thúc là bắt buộc"),
-  maxParticipants: yup.number().integer().min(1).nullable(),
+  maxParticipants: yup.number().typeError("Nhập số hợp lệ").required("Bắt buộc"),
 });
 
 // helper: convert various incoming date representations -> value for <input type="datetime-local">
@@ -94,45 +94,74 @@ export default function EventEditor({ event, onClose, onSaved }) {
 
   const onSubmit = async (data) => {
     try {
-      // prepare multipart payload including maxParticipants
-      const form = new FormData();
-      form.append("title", data.title);
-      form.append("description", data.description);
-      form.append("location", data.location);
-      form.append("startDate", formatForBackend(data.startDate));
-      form.append("endDate", formatForBackend(data.endDate));
-      if (data.categoryId) form.append("categoryId", data.categoryId);
-      // only append maxParticipants when user filled it (avoid sending empty string)
-      if (data.maxParticipants !== "" && data.maxParticipants != null) {
-        form.append("maxParticipants", Number(data.maxParticipants));
-      }
-      if (imageFile) {
-        form.append("imageFile", imageFile);
+      // prepare dates in backend-friendly format
+      let start, end;
+      try {
+        start = formatForBackend(data.startDate);
+        end = formatForBackend(data.endDate);
+      } catch (err) {
+        return alert("Định dạng ngày không hợp lệ. Vui lòng chọn lại ngày/giờ.");
       }
 
-      try {
-        const res = await axios.post("/events/create", form, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        onSaved?.(res.data);
-      } catch (err) {
-        console.error("create event failed", err);
-        throw err;
+      // maxParticipants normalization
+      const maxP = data.maxParticipants ? parseInt(data.maxParticipants, 10) : null;
+
+      if (imageFile) {
+        const form = new FormData();
+        form.append("title", data.title);
+        form.append("description", data.description);
+        form.append("location", data.location);
+        form.append("startDate", start);
+        form.append("endDate", end);
+        if (data.categoryId) form.append("categoryId", data.categoryId);
+        if (maxP !== null) form.append("maxParticipants", String(maxP));
+        form.append("imageFile", imageFile);
+
+        if (event && event.id) {
+          await axios.put(`/events/update/${event.id}`, form); // backend handles multipart
+        } else {
+          await axios.post("/events/create", form);
+        }
+      } else {
+        const payload = {
+          title: data.title,
+          description: data.description,
+          location: data.location,
+          startDate: start,
+          endDate: end,
+          maxParticipants: maxP,
+        };
+        if (data.categoryId) payload.category = { id: Number(data.categoryId) };
+
+        if (event && event.id) {
+          await axios.put(`/events/update/${event.id}`, payload);
+        } else {
+          await axios.post("/events/create", payload);
+        }
       }
+
+      onSaved?.();
     } catch (err) {
       alert(err.response?.data?.message || "Lưu sự kiện thất bại");
     }
   };
 
+  useEffect(() => {
+    document.body.style.overflow = "hidden"; // khóa cuộn nền
+    return () => {
+      document.body.style.overflow = "auto"; // mở lại khi đóng modal
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-2xl p-6">
+      <div className="bg-white rounded-lg w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold">{event ? "Chỉnh sửa sự kiện" : "Tạo sự kiện mới"}</h3>
           <button onClick={onClose} className="text-gray-500">✕</button>
         </div>
 
-        <form onSubmit={(e)=>{ e.preventDefault(); handleSubmit(onSubmit)(); }} className="space-y-3">
+        <form onSubmit={(e) => { e.preventDefault(); handleSubmit(onSubmit)(); }} className="space-y-3">
           <input {...register("title")} placeholder="Tiêu đề" className="w-full border p-2 rounded" />
           <p className="text-xs text-red-600">{errors.title?.message}</p>
 

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import axios from "../../api/axios";
-import { useNavigate } from "react-router-dom";
-import EventCard from "../../components/EventCard";
+import EventListManager from "./EventListManager";
 import CategoryManager from "./CategoryManager";
 import RegistrationsManager from "./RegistrationsManager";
 import EventEditor from "./EventEditor";
+import { motion } from "framer-motion";
+import { BarChart3, Flame, FileText, PlusCircle } from "lucide-react";
 
 export default function ManagerHome() {
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
@@ -12,7 +13,6 @@ export default function ManagerHome() {
   const [editingEvent, setEditingEvent] = useState(null);
   const [events, setEvents] = useState([]);
   const [stats, setStats] = useState({ newEvents: 0, trending: 0, posts: 0 });
-  const navigate = useNavigate();
 
   useEffect(() => {
     loadMyEvents();
@@ -41,123 +41,94 @@ export default function ManagerHome() {
     }
   };
 
-  // Xóa sự kiện của manager (giống EventListManager)
-  const handleDelete = async (id) => {
-    if (!confirm("Xóa sự kiện?")) return;
-    try {
-      await axios.delete(`/events/delete/${id}`);
-      loadMyEvents();
-    } catch (err) {
-      alert(err.response?.data?.message || "Xóa thất bại");
-    }
-  };
+  const StatCard = ({ icon: Icon, label, value }) => (
+    <motion.div
+      className="bg-white p-5 rounded-2xl shadow hover:shadow-md transition flex items-center gap-4"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <div className="p-3 bg-gray-100 rounded-xl">
+        <Icon size={24} className="text-emerald-600" />
+      </div>
+      <div>
+        <div className="text-gray-500 text-sm">{label}</div>
+        <div className="text-2xl font-bold">{value}</div>
+      </div>
+    </motion.div>
+  );
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="max-w-7xl mx-auto p-6 space-y-8">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-semibold">Quản lý sự kiện</h1>
-          <p className="text-sm text-gray-500">Xin chào, {storedUser?.fullName}</p>
+          <h1 className="text-3xl font-bold">Quản lý sự kiện</h1>
+          <p className="text-gray-500 mt-1">Xin chào, {storedUser?.fullName}</p>
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => { setEditingEvent(null); setShowEditor(true); }}
-            className="px-4 py-2 bg-emerald-600 text-white rounded"
-          >
-            Tạo sự kiện mới
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            setEditingEvent(null);
+            setShowEditor(true);
+          }}
+          className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow"
+        >
+          <PlusCircle size={18} /> Tạo sự kiện mới
+        </button>
       </div>
 
-      {/* Ô thống kê – giữ nguyên như mini dashboard */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-500">Sự kiện mới</div>
-          <div className="text-xl font-bold">{stats.newEvents}</div>
-        </div>
-        <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-500">Sự kiện thu hút</div>
-          <div className="text-xl font-bold">{stats.trending}</div>
-        </div>
-        <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-500">Bài viết mới</div>
-          <div className="text-xl font-bold">{stats.posts}</div>
-        </div>
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <StatCard icon={BarChart3} label="Sự kiện mới" value={stats.newEvents} />
+        <StatCard icon={Flame} label="Sự kiện thu hút" value={stats.trending} />
+        <StatCard icon={FileText} label="Bài viết mới" value={stats.posts} />
       </div>
 
-      {/* DANH SÁCH SỰ KIỆN CỦA MANAGER – dạng grid EventCard giống dashboard */}
-      <div className="bg-white p-4 rounded shadow mb-6">
-        <h3 className="font-semibold mb-3">Sự kiện của bạn</h3>
+      {/* Event List */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+        <EventListManager
+          events={events}
+          onEdit={(ev) => {
+            setEditingEvent(ev);
+            setShowEditor(true);
+          }}
+          onRefresh={loadMyEvents}
+        />
+      </motion.div>
 
-        {!events.length ? (
-          <div className="text-center text-gray-500">
-            Bạn chưa có sự kiện nào. Hãy tạo sự kiện mới.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {events.map((ev) => (
-              <div key={ev.id} className="relative">
-                <EventCard
-                  event={ev}
-                  isFavorited={false}
-                  onToggleFavorite={() => {}}
-                />
-                <div className="mt-2 flex items-center justify-between gap-2">
-                  <div className="text-sm text-gray-600">
-                    <span className="font-medium">{ev.status}</span>
-                    <span className="ml-2 text-gray-400">
-                      · {ev.registeredCount ?? 0} đăng ký
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => navigate(`/manager/events/${ev.id}`)}
-                      className="px-3 py-1 border rounded text-sm hover:bg-gray-50"
-                    >
-                      Chi tiết
-                    </button>
-                    <button
-                      onClick={() => { setEditingEvent(ev); setShowEditor(true); }}
-                      className="px-3 py-1 border rounded text-sm hover:bg-gray-50"
-                    >
-                      Sửa
-                    </button>
-                    <button
-                      onClick={() => handleDelete(ev.id)}
-                      className="px-3 py-1 border text-red-600 rounded text-sm hover:bg-red-50"
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Khối Danh mục & Báo cáo/Đăng ký – giữ nguyên */}
-      <div className="mt-10 grid grid-cols-2 gap-6">
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-3">Quản lý danh mục</h3>
+      {/* Category & Registrations */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
+        <motion.div
+          className="bg-white p-5 rounded-2xl shadow"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+        >
+          <h3 className="font-semibold text-lg mb-4">Quản lý danh mục</h3>
           <CategoryManager onUpdated={loadMyEvents} />
-        </div>
+        </motion.div>
 
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-3">Báo cáo & đăng ký</h3>
-          <p className="text-sm text-gray-500">
-            Chọn một sự kiện để quản lý đăng ký / xuất dữ liệu.
-          </p>
+        <motion.div
+          className="bg-white p-5 rounded-2xl shadow"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+        >
+          <h3 className="font-semibold text-lg mb-4">Báo cáo & đăng ký</h3>
+          <p className="text-sm text-gray-500 mb-2">Chọn sự kiện để xem danh sách đăng ký.</p>
           <RegistrationsManager events={events} />
-        </div>
+        </motion.div>
       </div>
 
+      {/* Editor Modal */}
       {showEditor && (
         <EventEditor
           event={editingEvent}
-          onClose={() => { setShowEditor(false); setEditingEvent(null); }}
-          onSaved={() => { setShowEditor(false); loadMyEvents(); }}
+          onClose={() => {
+            setShowEditor(false);
+            setEditingEvent(null);
+          }}
+          onSaved={() => {
+            setShowEditor(false);
+            loadMyEvents();
+          }}
         />
       )}
     </div>

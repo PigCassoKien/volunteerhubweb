@@ -71,31 +71,116 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-4 rounded shadow-sm bg-emerald-50">
-          <h3 className="font-medium text-emerald-700">Sự kiện mới</h3>
-          <ul className="mt-2 space-y-2 text-sm text-gray-700">
-            {stats.newEvents.slice(0,5).map(ev => <li key={ev.id}>{ev.title}</li>)}
-            {!stats.newEvents.length && <li className="text-gray-500">Không có sự kiện mới</li>}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+        {/* Sự kiện mới */}
+        <div className="bg-white rounded-xl shadow-sm border">
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <h3 className="font-semibold flex items-center gap-2 text-emerald-700">
+              <FiCalendar /> Sự kiện mới
+            </h3>
+            <Link to="/admin/events" className="text-sm text-emerald-600 hover:underline">
+              Xem tất cả
+            </Link>
+          </div>
+
+          <ul className="divide-y">
+            {stats.newEvents.slice(0, 5).map(ev => (
+              <li key={ev.id}>
+                <Link
+                  to={`/events/${ev.id}`}
+                  className="block px-4 py-3 hover:bg-emerald-50 transition"
+                >
+                  <div className="font-medium text-gray-800 line-clamp-1">
+                    {ev.title}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Ngày tạo: {ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : "—"}
+                  </div>
+                </Link>
+              </li>
+            ))}
+
+            {!stats.newEvents.length && (
+              <li className="px-4 py-6 text-sm text-gray-500 text-center">
+                Không có sự kiện mới
+              </li>
+            )}
           </ul>
         </div>
 
-        <div className="p-4 rounded shadow-sm bg-white">
-          <h3 className="font-medium">Sự kiện thu hút</h3>
-          <ul className="mt-2 space-y-2 text-sm text-gray-700">
-            {stats.trendingEvents.slice(0,5).map(ev => <li key={ev.id}>{ev.title}</li>)}
-            {!stats.trendingEvents.length && <li className="text-gray-500">Không có dữ liệu</li>}
+        {/* Sự kiện thu hút */}
+        <div className="bg-white rounded-xl shadow-sm border">
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <h3 className="font-semibold flex items-center gap-2 text-emerald-700">
+              <FiBarChart2 /> Sự kiện thu hút
+            </h3>
+            <Link to="/admin/events" className="text-sm text-blue-600 hover:underline">
+              Xem tất cả
+            </Link>
+          </div>
+
+          <ul className="divide-y">
+            {stats.trendingEvents.slice(0, 5).map(ev => (
+              <li key={ev.id}>
+                <Link
+                  to={`/events/${ev.id}`}
+                  className="block px-4 py-3 hover:bg-blue-50 transition"
+                >
+                  <div className="font-medium text-gray-800 line-clamp-1">
+                    {ev.title}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Đăng ký: {ev.totalRegistrations ?? 0}
+                  </div>
+                </Link>
+              </li>
+            ))}
+
+            {!stats.trendingEvents.length && (
+              <li className="px-4 py-6 text-sm text-gray-500 text-center">
+                Không có dữ liệu
+              </li>
+            )}
           </ul>
         </div>
 
-        <div className="p-4 rounded shadow-sm bg-white">
-          <h3 className="font-medium">Bài viết mới</h3>
-          <ul className="mt-2 space-y-2 text-sm text-gray-700">
-            {stats.newPosts.slice(0,5).map(p => <li key={p.id}>{p.content?.slice(0,80)}</li>)}
-            {!stats.newPosts.length && <li className="text-gray-500">Không có bài viết</li>}
+        {/* Bài viết mới */}
+        <div className="bg-white rounded-xl shadow-sm border">
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <h3 className="font-semibold flex items-center gap-2 text-emerald-700">
+              <FiClock /> Bài viết mới
+            </h3>
+            <Link to="/admin/posts" className="text-sm text-purple-600 hover:underline">
+              Xem tất cả
+            </Link>
+          </div>
+
+          <ul className="divide-y">
+            {stats.newPosts.slice(0, 5).map(p => (
+              <li key={p.id}>
+                <Link
+                  to={`/posts/${p.id}`}
+                  className="block px-4 py-3 hover:bg-purple-50 transition"
+                >
+                  <div className="text-sm text-gray-800 line-clamp-2">
+                    {p.content}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : ""}
+                  </div>
+                </Link>
+              </li>
+            ))}
+
+            {!stats.newPosts.length && (
+              <li className="px-4 py-6 text-sm text-gray-500 text-center">
+                Không có bài viết
+              </li>
+            )}
           </ul>
         </div>
       </div>
+
 
       <div className="mt-6 flex gap-3">
         <Link to="/admin/events" className="px-4 py-2 bg-blue-600 text-white rounded">Quản lý sự kiện</Link>

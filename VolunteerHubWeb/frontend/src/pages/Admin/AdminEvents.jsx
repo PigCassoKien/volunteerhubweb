@@ -60,7 +60,7 @@ export default function AdminEvents() {
               event={ev}
               // admin view: no favorite interactions
               isFavorited={false}
-              onToggleFavorite={() => {}}
+              onToggleFavorite={() => { }}
             />
             <div className="mt-2 flex items-center justify-between gap-2">
               <div className="text-sm text-gray-600">
