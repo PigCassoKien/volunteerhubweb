@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "../../api/axios";
 import AdminLayout from "../../components/AdminLayout";
 import AdminUserModal from "../../components/AdminUserModal";
+import Pagination from "../../components/Pagination";
 
 const PAGE_SIZE = 8;
 
@@ -30,6 +31,10 @@ export default function AdminUsers() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [users.length]);
 
   const lock = async (id) => {
     if (!confirm("Khóa tài khoản này?")) return;
@@ -210,48 +215,14 @@ export default function AdminUsers() {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-6">
-          <div className="text-sm text-gray-500">
-            Trang {page} / {totalPages}
-          </div>
+      <div className="mt-6">
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onChange={setPage}
+        />
+      </div>
 
-          <div className="flex gap-1">
-            <button
-              disabled={page === 1}
-              onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 text-sm border rounded-md disabled:opacity-40"
-            >
-              Trước
-            </button>
-
-            {Array.from({ length: totalPages }).map((_, i) => {
-              const p = i + 1;
-              return (
-                <button
-                  key={p}
-                  onClick={() => setPage(p)}
-                  className={`px-3 py-1.5 text-sm rounded-md border
-                    ${p === page
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "hover:bg-gray-50"
-                    }`}
-                >
-                  {p}
-                </button>
-              );
-            })}
-
-            <button
-              disabled={page === totalPages}
-              onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 text-sm border rounded-md disabled:opacity-40"
-            >
-              Sau
-            </button>
-          </div>
-        </div>
-      )}
       {selectedUser && (
         <AdminUserModal
           user={selectedUser}

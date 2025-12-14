@@ -33,7 +33,7 @@ export default function Login() {
       // redirect based on role
       const role = (user.role || "").toUpperCase();
       if (role === "ADMIN") {
-        navigate("/admin");
+        navigate("/admin/dashboard");
       } else if (role === "EVENT_MANAGER") {
         navigate("/manager");
       } else {

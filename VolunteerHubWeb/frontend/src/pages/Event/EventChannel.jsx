@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import axios from "../../api/axios";
 import { getFileUrl } from "../../utils/files";
+import { useSearchParams } from "react-router-dom";
 import {
   FiHeart,
   FiMessageCircle,
@@ -36,6 +37,9 @@ export default function EventChannel({ eventId }) {
 
   const [showAllAnnouncements, setShowAllAnnouncements] = useState(false);
   const [eventNotifications, setEventNotifications] = useState([]); // <-- added
+
+  const [searchParams] = useSearchParams();
+  const focusPostId = searchParams.get("post");
 
   // Lọc các post là THÔNG BÁO (announcement=true), sắp xếp mới nhất trước
   // merge manager notifications (Notification entity) + posts marked announcement
@@ -289,6 +293,14 @@ export default function EventChannel({ eventId }) {
     clearReplyFor(postId);
   };
 
+  useEffect(() => {
+    if (!focusPostId) return;
+    setTimeout(() => {
+      const el = document.getElementById(`post-${focusPostId}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 300);
+  }, [focusPostId, posts]);
+
   if (!eventId) return null;
   if (loading) return <div className="p-4 text-center">Đang tải kênh trao đổi...</div>;
 
@@ -410,7 +422,13 @@ export default function EventChannel({ eventId }) {
           const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k);
 
           return (
-            <div key={p.id} className="bg-white rounded-xl p-4 shadow-sm">
+            <div
+              key={p.id}
+              id={`post-${p.id}`}
+              className={`bg-white rounded-xl p-4 shadow-sm transition
+    ${String(p.id) === focusPostId ? "ring-2 ring-emerald-400 bg-emerald-50" : ""}
+  `}
+            >
               <div className="flex gap-3">
                 <img src={p.userAvatar ? getFileUrl(p.userAvatar) : (p.userAvatarFile ? getFileUrl(p.userAvatarFile) : "https://i.pravatar.cc/48")} alt="avatar" className="w-11 h-11 rounded-full object-cover" />
                 <div className="flex-1">
