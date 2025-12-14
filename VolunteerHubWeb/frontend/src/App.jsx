@@ -82,7 +82,7 @@ function App() {
 
               {/* Admin area: only ADMIN */}
               <Route
-                path="/admin"
+                path="/admin/dashboard"
                 element={
                   <RoleRoute roles={["ADMIN"]}>
                     <AdminDashboard />

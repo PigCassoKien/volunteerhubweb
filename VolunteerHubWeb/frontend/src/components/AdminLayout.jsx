@@ -1,50 +1,51 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
+import { FiUsers } from "react-icons/fi";
+import { FaChartBar } from "react-icons/fa";
+import { FaRegFileAlt } from "react-icons/fa";
+import { MdEventAvailable } from "react-icons/md";
 
 export default function AdminLayout({ title = "Admin", children }) {
   const location = useLocation();
 
   const nav = [
-    { label: "Tổng quan", to: "/admin" },
-    { label: "Sự kiện", to: "/admin/events" },
-    { label: "Người dùng", to: "/admin/users" },
-    { label: "Xuất dữ liệu", to: "/admin/export" },
+    { label: "Tổng quan", icon: <FaChartBar />, path: "/admin/dashboard" },
+    { label: "Sự kiện", icon: <MdEventAvailable />, path: "/admin/events" },
+    { label: "Người dùng", icon: <FiUsers />, path: "/admin/users" },
+    { label: "Xuất dữ liệu", icon: <FaRegFileAlt />, path: "/admin/export" },
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="text-emerald-600 font-bold text-lg">Volunteer Hub</Link>
-            <h1 className="text-lg font-semibold text-gray-800">{title}</h1>
+      <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6">
+        <aside className="bg-white rounded-xl p-4 shadow-sm">
+          <div className="flex items-center gap-3 mb-6 cursor-pointer"
+            onClick={() => navigate("/")}>
+            <i className="fa-solid fa-hand-holding-heart text-green-600 text-3xl"></i>
+            <h1 className="text-xl font-bold text-green-700">
+              Volunteer<span className="text-green-500">Hub</span>
+            </h1>
           </div>
-          <div className="text-sm text-gray-600">Khu quản trị</div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 md:grid-cols-4 gap-6">
-        <aside className="md:col-span-1 bg-white rounded-xl p-4 shadow-sm">
-          <div className="text-sm text-gray-500 font-medium mb-3">Admin Menu</div>
-          <nav className="flex flex-col gap-1">
-            {nav.map((n) => (
+          <nav className="flex flex-col gap-1 text-gray-700">
+            {nav.map((item) => (
               <Link
-                key={n.to}
-                to={n.to}
+                key={item.label}
+                to={item.path}
                 className={
-                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm " +
-                  (location.pathname === n.to
+                  "flex items-center gap-3 p-2 rounded-lg hover:bg-green-50 hover:text-green-600 transition " +
+                  (location.pathname === item.path
                     ? "bg-emerald-50 text-emerald-700 font-medium"
                     : "text-gray-700 hover:bg-gray-50")
                 }
               >
-                {n.label}
+                <span className="text-green-600 text-xl">{item.icon}</span>
+                {item.label}
               </Link>
             ))}
           </nav>
         </aside>
 
-        <main className="md:col-span-3">
+        <main className="">
           <div className="bg-white rounded-xl p-6 shadow-sm">
             {/* breadcrumb / title area */}
             <div className="flex items-center justify-between mb-4">
