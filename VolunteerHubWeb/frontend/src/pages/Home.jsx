@@ -88,7 +88,7 @@ export default function Home() {
           }
         });
         setMyStatusByEvent(byEvent);
-      } catch {}
+      } catch { }
     };
     loadMyStatuses();
   }, []);
@@ -124,7 +124,7 @@ export default function Home() {
           const favRes = await axios.get("/favorites/my");
           favIds = new Set((favRes.data || []).map(e => String(e.id)));
           setFavoriteIds(favIds);
-        } catch (_) {}
+        } catch (_) { }
 
         // ưu tiên favorites
         const sorted = publicEvents.sort((a, b) => {
