@@ -82,6 +82,13 @@ export default function Profile() {
     ? getFileUrl(user.avatarFile)
     : "https://i.pravatar.cc/200";
 
+  const roleLabels = {
+    VOLUNTEER: "Tình nguyện viên",
+    EVENT_MANAGER: "Quản lý sự kiện",
+    ADMIN: "Quản trị viên"
+  };
+  const roleLabel = user?.role ? (roleLabels[user.role] || user.role) : "";
+
   return (
     <div className="bg-[#F0FDF4] min-h-screen p-5">
 
@@ -135,7 +142,7 @@ export default function Profile() {
             <h2 className="text-xl font-bold mt-4">{user.fullName}</h2>
 
             <span className="bg-[#D1FADF] text-[#027A48] px-4 py-1 rounded-full mt-2 text-sm">
-              {user.role === "ADMIN" ? "Quản trị viên" : "Tình nguyện viên"}
+              {roleLabel}
             </span>
 
             <p className="text-gray-600 mt-4 px-2">

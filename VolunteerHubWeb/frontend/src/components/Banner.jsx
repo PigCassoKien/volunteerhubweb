@@ -1,6 +1,12 @@
 import heroImg from "../assets/Banner.jpg";
+import { useState } from "react";
 
 function Banner({ onStart }) {
+  const [showVideo, setShowVideo] = useState(false);
+
+  const openVideo = () => setShowVideo(true);
+  const closeVideo = () => setShowVideo(false);
+
   return (
     <section
       className="relative bg-cover bg-center bg-no-repeat h-[90vh] flex items-center justify-center"
@@ -38,7 +44,7 @@ function Banner({ onStart }) {
             <i className="fa-solid fa-play"></i>
             Bắt đầu hành trình
           </button>
-          <button className="bg-white/20 border border-white px-6 py-3 rounded-lg font-medium hover:bg-white/30 transition flex items-center gap-2">
+          <button onClick={openVideo} className="bg-white/20 border border-white px-6 py-3 rounded-lg font-medium hover:bg-white/30 transition flex items-center gap-2">
             <i className="fa-solid fa-circle-play"></i>
             Xem video giới thiệu
           </button>
@@ -60,6 +66,35 @@ function Banner({ onStart }) {
           </div>
         </div>
       </div>
+      {showVideo && (
+        <div
+          className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
+          onClick={closeVideo}
+        >
+          <div
+            className="relative bg-black rounded-xl w-[90%] max-w-3xl aspect-video"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Nút đóng */}
+            <button
+              onClick={closeVideo}
+              className="absolute -top-10 right-0 text-white text-3xl hover:text-gray-300"
+            >
+              ✕
+            </button>
+
+            {/* Video YouTube */}
+            <iframe
+              className="w-full h-full rounded-xl"
+              src="https://www.youtube.com/embed/21jZVCTAvfw?autoplay=1&start=2"
+              title="Video giới thiệu"
+              frameBorder="0"
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -5,7 +5,7 @@ import axios from "../api/axios";
 import { getFileUrl } from "../utils/files";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
 
-const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () => {} }) => {
+const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () => { } }) => {
   const {
     id, title, location, imageFile, startDate, endDate,
     maxParticipants, status: eventStatus, category, createdByFullName
@@ -95,7 +95,10 @@ const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () =
     }
 
     return (
-      <Link to={`/events/${id}`} className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
+      <Link
+        to={`/events/${id}`}
+        className="w-full px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-center"
+      >
         Đăng ký
       </Link>
     );
@@ -144,17 +147,17 @@ const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () =
           className={`absolute top-3 left-3 text-white text-sm px-3 py-1 rounded-full
             ${eventStatus === "APPROVED" ? "bg-emerald-600"
               : eventStatus === "PENDING" ? "bg-orange-500"
-              : eventStatus === "REJECTED" ? "bg-gray-500"
-              : eventStatus === "COMPLETED" ? "bg-gray-600"
-              : eventStatus === "CANCELED" ? "bg-red-600"
-              : "bg-emerald-600"}`}
+                : eventStatus === "REJECTED" ? "bg-gray-500"
+                  : eventStatus === "COMPLETED" ? "bg-gray-600"
+                    : eventStatus === "CANCELED" ? "bg-red-600"
+                      : "bg-emerald-600"}`}
         >
           {eventStatus === "APPROVED" ? "Đã phê duyệt"
             : eventStatus === "PENDING" ? "Đang xử lý"
-            : eventStatus === "REJECTED" ? "Đã từ chối"
-            : eventStatus === "COMPLETED" ? "Đã hoàn thành"
-            : eventStatus === "CANCELED" ? "Đã hủy"
-            : "Sự kiện"}
+              : eventStatus === "REJECTED" ? "Đã từ chối"
+                : eventStatus === "COMPLETED" ? "Đã hoàn thành"
+                  : eventStatus === "CANCELED" ? "Đã hủy"
+                    : "Sự kiện"}
         </span>
 
         <span className="absolute top-3 right-3 bg-white/80 text-emerald-700 text-xs px-3 py-1 rounded-full">
@@ -210,12 +213,12 @@ const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () =
 
         <div className="mt-4 flex gap-2">
           {renderButton()}
-          <Link to={`/events/${id}`} className="w-10 h-10 flex items-center justify-center border rounded-md hover:bg-gray-100">
+          <Link to={`/events/${id}`} className="w-16 h-10 flex items-center justify-center border rounded-md hover:bg-gray-100">
             <i className="fa-regular fa-eye text-gray-600"></i>
           </Link>
           <button
             onClick={handleHeart}
-            className="w-10 h-10 flex items-center justify-center border rounded-md hover:bg-gray-100"
+            className="w-16 h-10 flex items-center justify-center border rounded-md hover:bg-gray-100"
           >
             {isFavorited ? <FaHeart className="text-red-500" /> : <FaRegHeart className="text-gray-600" />}
           </button>

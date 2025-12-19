@@ -18,4 +18,5 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     List<Post> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
 
     int countByEventId(Long eventId);
+
 }

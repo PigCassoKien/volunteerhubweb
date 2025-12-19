@@ -104,7 +104,7 @@ function Navbar() {
     // existing auth-change handling...
     if (token) {
       // try register push subscription (non-blocking)
-      initPush().catch(() => {});
+      initPush().catch(() => { });
     }
   }, [token, user]);
 
@@ -140,8 +140,8 @@ function Navbar() {
                 <Link
                   to={item.path}
                   className={`flex items-center gap-2 hover:text-green-600 transition ${location.pathname === item.path
-                      ? "text-green-600 border-b-2 border-green-600 pb-1"
-                      : ""
+                    ? "text-green-600 border-b-2 border-green-600 pb-1"
+                    : ""
                     }`}
                 >
                   <i className={`${item.icon} text-green-500`}></i>
@@ -203,6 +203,17 @@ function Navbar() {
                   </div>
 
                   <ul className="mt-3 space-y-3 text-gray-700">
+                    {user?.role === "ADMIN" && (
+                      <li>
+                        <button
+                          onClick={() => { setOpen(false); navigate("/admin/dashboard"); }}
+                          className="flex items-center gap-2 hover:text-green-600 w-full text-left"
+                        >
+                          <i className="fa-solid fa-briefcase text-green-600"></i> Dashboard
+                        </button>
+                      </li>
+                    )}
+
                     <li>
                       <Link to="/profile" className="flex items-center gap-2 hover:text-green-600">
                         <i className="fa-solid fa-user text-green-600"></i> Hồ sơ cá nhân
@@ -221,17 +232,6 @@ function Navbar() {
                           className="flex items-center gap-2 hover:text-green-600 w-full text-left"
                         >
                           <i className="fa-solid fa-gear text-green-600"></i> Quản lý sự kiện
-                        </button>
-                      </li>
-                    )}
-
-                    {user?.role === "ADMIN" && (
-                      <li>
-                        <button
-                          onClick={() => { setOpen(false); navigate("/admin"); }}
-                          className="flex items-center gap-2 hover:text-green-600 w-full text-left"
-                        >
-                          <i className="fa-solid fa-gear text-green-600"></i> Quản lý chung
                         </button>
                       </li>
                     )}
