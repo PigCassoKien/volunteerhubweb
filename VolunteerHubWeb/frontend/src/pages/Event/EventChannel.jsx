@@ -279,6 +279,19 @@ export default function EventChannel({ eventId }) {
     }
   };
 
+  // delete comment helper (called from CommentsBlock via prop)
+  const deleteComment = async (postId, commentId) => {
+    if (!confirm("Xóa bình luận?")) return;
+    try {
+      await axios.delete(`/comments/delete/${commentId}`);
+      // refresh comment list for the post
+      await fetchComments(postId);
+    } catch (err) {
+      console.error("Delete comment failed", err);
+      alert("Xóa bình luận thất bại");
+    }
+  };
+
   // reply helpers: set/clear replyContext (do not prefill input with @name to avoid duplicate @ in render)
   const setReplyTo = (postId, parentId, parentName) => {
     setReplyContext((s) => ({ ...s, [postId]: { parentId, parentName, draftText: "" } }));
@@ -488,6 +501,7 @@ export default function EventChannel({ eventId }) {
                         comments={commentsByPost[p.id] || []}
                         onAddComment={addComment}
                         onReply={(parentId, parentName) => setReplyTo(p.id, parentId, parentName)}
+                        onDeleteComment={(cid) => deleteComment(p.id, cid)}
                         fetchReactionsForComment={fetchReactionsForComment}
                         reactionSummary={reactionSummary}
                         onReact={handleReact}
@@ -575,7 +589,7 @@ ReactionPicker.propTypes = {
 };
 
 /* CommentsBlock: display only; replies & input handled by parent */
-function CommentsBlock({ postId, comments = [], onAddComment, onReply, fetchReactionsForComment, reactionSummary, onReact }) {
+function CommentsBlock({ postId, comments = [], onAddComment, onReply, fetchReactionsForComment, reactionSummary, onReact, onDeleteComment }) {
   const renderComment = (c) => {
     const reaction = reactionSummary ? reactionSummary[`comment_${c.id}`] || { counts: {}, myType: null } : { counts: {}, myType: null };
     const counts = reaction.counts || {};
@@ -607,7 +621,7 @@ function CommentsBlock({ postId, comments = [], onAddComment, onReply, fetchReac
 
             <button onClick={() => { onReply(c.id, c.userFullName); }} className="hover:underline">Trả lời</button>
             {c.canDelete && (
-              <button onClick={() => deleteComment(c.id)} className="text-red-500 hover:underline text-xs">Xóa</button>
+              <button onClick={() => onDeleteComment && onDeleteComment(c.id)} className="text-red-500 hover:underline text-xs">Xóa</button>
             )}
             <div>{new Date(c.createdAt).toLocaleString()}</div>
           </div>
@@ -640,4 +654,5 @@ CommentsBlock.propTypes = {
   fetchReactionsForComment: PropTypes.func,
   reactionSummary: PropTypes.object,
   onReact: PropTypes.func,
+  onDeleteComment: PropTypes.func,
 };

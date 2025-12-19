@@ -49,4 +49,13 @@ public class EventRegistration {
     private String skills;
     private Boolean confirmation;
 
+    @Column(length = 2000)
+    private String cancellationReason;
+
+    private LocalDateTime canceledAt;
+
+    @ManyToOne
+    @JoinColumn(name = "canceled_by_id")
+    private User canceledBy;
+
 }

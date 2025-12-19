@@ -22,7 +22,15 @@ export default function ManagerHome() {
   const loadMyEvents = async () => {
     try {
       const { data } = await axios.get("/events/my");
-      setEvents(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      const now = Date.now();
+      list.sort((a, b) => {
+        const aEnded = a.endDate ? new Date(a.endDate).getTime() < now : false;
+        const bEnded = b.endDate ? new Date(b.endDate).getTime() < now : false;
+        if (aEnded !== bEnded) return aEnded ? 1 : -1;
+        return new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime();
+      });
+      setEvents(list);
     } catch (err) {
       console.error("Load my events failed", err);
     }

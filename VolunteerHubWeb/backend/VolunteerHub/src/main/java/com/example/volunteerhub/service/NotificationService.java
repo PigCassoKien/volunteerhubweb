@@ -111,6 +111,15 @@ public class NotificationService {
     public void notifyRegistrationStatusChange(Long userId, Long eventId, RegistrationStatus status) {
         User u = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
         Event e = eventRepository.findById(eventId).orElseThrow(() -> new RuntimeException("Event not found"));
+        // Avoid sending duplicate registration notifications for same user+event
+        try {
+            var existing = notificationRepository.findFirstByUserIdAndRelatedIdAndType(userId, eventId, NotificationType.EVENT_REGISTRATION);
+            if (existing.isPresent()) {
+                return; // already notified this user about this event's registration
+            }
+        } catch (Exception ex) {
+            // ignore repository issues and proceed to send
+        }
         String verb;
         switch (status) {
             case APPROVED: verb = "đã được duyệt"; break;
@@ -172,7 +181,11 @@ public class NotificationService {
         User recipient = userRepository.findById(recipientUserId).orElseThrow(() -> new RuntimeException("User not found"));
         String actorName = null;
         if (actorUserId != null) {
-            actorName = userRepository.findById(actorUserId).map(User::getFullName).orElse(null);
+            User actorUser = userRepository.findById(actorUserId).orElse(null);
+            if (actorUser != null) {
+                if (actorUser.getFullName() != null && !actorUser.getFullName().isBlank()) actorName = actorUser.getFullName();
+                else actorName = actorUser.getEmail(); // fallback to email when full name missing
+            }
         }
         String target = relatedType == RelatedType.POST ? "bài viết của bạn" : "bình luận của bạn";
         String content = (actorName != null ? actorName : "Ai đó") + " đã phản ứng (" + reactionType + ") với " + target + ".";

@@ -164,8 +164,18 @@ function Navbar() {
         {token && user ? (
           <div className="flex items-center gap-4">
 
-            {/* 🔔 NotificationBell */}
-            <NotificationBell user={user} token={token} />
+              {/* 🔔 NotificationBell */}
+              <NotificationBell user={user} token={token} />
+
+              {/* Enable notifications button (manual) */}
+              {typeof Notification !== "undefined" && Notification.permission !== "granted" && (
+                <button
+                  onClick={() => initPush().catch(() => {})}
+                  className="px-3 py-1 bg-green-50 text-green-600 border border-green-200 rounded-md text-sm hover:bg-green-100 transition"
+                >
+                  Bật thông báo
+                </button>
+              )}
 
             {/* Avatar + dropdown */}
             <div className="relative" ref={dropdownRef}>

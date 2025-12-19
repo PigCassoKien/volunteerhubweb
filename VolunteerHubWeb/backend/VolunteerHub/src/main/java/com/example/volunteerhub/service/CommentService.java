@@ -75,6 +75,15 @@ public class CommentService {
             notificationService.notifyComment(postOwnerId, post.getId(), RelatedType.POST, user.getId());
         }
 
+        // If this is a reply to another comment, also notify the parent comment's owner (if not the same as commenter)
+        if (comment.getParentComment() != null && comment.getParentComment().getUser() != null) {
+            Long parentOwnerId = comment.getParentComment().getUser().getId();
+            if (!parentOwnerId.equals(user.getId())) {
+                // relatedId = parent comment id, relatedType = COMMENT
+                notificationService.notifyComment(parentOwnerId, comment.getParentComment().getId(), RelatedType.COMMENT, user.getId());
+            }
+        }
+
         CommentDTO dto = modelMapper.map(comment, CommentDTO.class);
         dto.setUserId(comment.getUser().getId());
         dto.setPostId(comment.getPost().getId());

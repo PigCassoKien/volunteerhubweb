@@ -3,7 +3,10 @@ import axios from "../api/axios";
 import EventCard from "../components/EventCard";
 import Banner from "../components/Banner";
 import StatsSection from "../components/StatsSection";
+import Pagination from "../components/Pagination";
+import { Link } from "react-router-dom";
 import { FaUserFriends, FaCalendarCheck, FaCheckCircle, FaClock, FaStar } from "react-icons/fa";
+import { FiBarChart2, FiCalendar, FiClock } from "react-icons/fi";
 
 export default function Home() {
   const stats = [
@@ -51,6 +54,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [myStatusByEvent, setMyStatusByEvent] = useState({});
   const [favoriteIds, setFavoriteIds] = useState(new Set());
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 6;
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -80,13 +85,20 @@ export default function Home() {
           endDate: "2100-01-01T00:00:00",
           status: null,
         });
+
         const byEvent = {};
-        const priority = { APPROVED: 3, PENDING: 2, COMPLETED: 1, CANCELED: 0, REJECTED: 0 };
-        res.data.forEach((r) => {
-          if (!byEvent[r.eventId] || priority[r.status] > priority[byEvent[r.eventId]]) {
-            byEvent[r.eventId] = r.status;
+        const priority = { APPROVED: 4, PENDING: 3, COMPLETED: 2, CANCELED: 1, REJECTED: 0 };
+
+        (res.data || []).forEach((r) => {
+          const evId = r.eventId;
+          const curr = byEvent[evId];
+          const currPriority = curr ? priority[curr.status] ?? 0 : -1;
+          const rPriority = priority[r.status] ?? 0;
+          if (!curr || rPriority > currPriority) {
+            byEvent[evId] = { status: r.status, regId: r.id };
           }
         });
+
         setMyStatusByEvent(byEvent);
       } catch { }
     };
@@ -126,11 +138,33 @@ export default function Home() {
           setFavoriteIds(favIds);
         } catch (_) { }
 
-        // ưu tiên favorites
+        // ưu tiên sự kiện chưa bắt đầu -> đang diễn ra -> đã kết thúc; favorites trong cùng nhóm
+        const timeStateWeight = (e) => {
+          const now = Date.now();
+          const startMs = e.startDate ? new Date(e.startDate).getTime() : null;
+          const endMs = e.endDate ? new Date(e.endDate).getTime() : null;
+          let state = "upcoming";
+          if (startMs && endMs) {
+            if (now < startMs) state = "upcoming";
+            else if (now >= startMs && now <= endMs) state = "ongoing";
+            else state = "ended";
+          } else if (endMs) {
+            state = now <= endMs ? "ongoing" : "ended";
+          }
+          return state === "upcoming" ? 0 : state === "ongoing" ? 1 : 2;
+        };
+
         const sorted = publicEvents.sort((a, b) => {
+          const wa = timeStateWeight(a);
+          const wb = timeStateWeight(b);
+          if (wa !== wb) return wa - wb;
+
           const fa = favIds.has(String(a.id)) ? 0 : 1;
           const fb = favIds.has(String(b.id)) ? 0 : 1;
-          return fa - fb;
+          if (fa !== fb) return fa - fb;
+
+          // fallback: by startDate asc
+          return new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime();
         });
         setEvents(sorted);
       } catch (err) {
@@ -155,6 +189,11 @@ export default function Home() {
       setEvents(prev => {
         const copy = [...prev];
         copy.sort((a, b) => {
+          const now = Date.now();
+          const aEnded = a.endDate ? new Date(a.endDate).getTime() < now : false;
+          const bEnded = b.endDate ? new Date(b.endDate).getTime() < now : false;
+          if (aEnded !== bEnded) return aEnded ? 1 : -1;
+
           const fa = favoriteIds.has(String(a.id)) ? 0 : 1;
           const fb = favoriteIds.has(String(b.id)) ? 0 : 1;
           return fa - fb;
@@ -171,6 +210,12 @@ export default function Home() {
     category === "Tất cả"
       ? events
       : events.filter((e) => e.category?.name === category);
+
+  // pagination
+  useEffect(() => { setPage(1); }, [category]);
+  const totalPages = Math.max(1, Math.ceil((filteredEvents || []).length / PAGE_SIZE));
+  const startIndex = (page - 1) * PAGE_SIZE;
+  const pagedEvents = (filteredEvents || []).slice(startIndex, startIndex + PAGE_SIZE);
 
   const testimonials = [
     {
@@ -192,6 +237,54 @@ export default function Home() {
       quote: "Là sinh viên, tôi có thể tham gia các hoạt động tình nguyện phù hợp với lịch học. Đây là cách tuyệt vời để phát triển bản thân.",
     },
   ];
+
+  // Dashboard summary (new/trending/posts)
+  const [dashboard, setDashboard] = useState({ newEvents: [], trendingEvents: [], newPosts: [] });
+  const [dashLoading, setDashLoading] = useState(true);
+  const [newEventPage, setNewEventPage] = useState(1);
+  const [trendingPage, setTrendingPage] = useState(1);
+  const [postPage, setPostPage] = useState(1);
+  const DASH_PAGE_SIZE = 5;
+
+  const parseScore = (desc) => {
+    if (!desc) return 0;
+    const m = String(desc).match(/__score:(\d+)/);
+    return m ? parseInt(m[1], 10) : 0;
+  };
+
+  const paginateArr = (arr, p, size) => {
+    if (!Array.isArray(arr)) return [];
+    const total = Math.max(1, Math.ceil(arr.length / size));
+    const page = Math.min(Math.max(1, p), total);
+    const start = (page - 1) * size;
+    return arr.slice(start, start + size);
+  };
+
+  const [eventsWithNewPosts, setEventsWithNewPosts] = useState([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await axios.get('/dashboard/stats');
+        const data = res.data || { newEvents: [], trendingEvents: [], newPosts: [] };
+        setDashboard(data);
+
+        // build eventsWithNewPosts summary
+        const map = {};
+        (data.newPosts || []).forEach(p => {
+          if (!p || !p.eventId) return;
+          map[p.eventId] = (map[p.eventId] || 0) + 1;
+        });
+        const arr = Object.keys(map).map(id => ({ id: Number(id), count: map[id] })).sort((a,b) => b.count - a.count);
+        setEventsWithNewPosts(arr);
+      } catch (err) {
+        console.error('Không thể tải dashboard:', err);
+      } finally {
+        setDashLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   return (
     <>
@@ -270,6 +363,123 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Dashboard: new / trending / new posts */}
+      <section className="bg-white py-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div className="bg-white rounded-xl shadow-sm border flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <h3 className="font-semibold flex items-center gap-2 text-emerald-700">
+                  <FiCalendar /> Sự kiện mới
+                </h3>
+                <Link to="/events" className="text-sm text-emerald-600 hover:underline">Xem tất cả</Link>
+              </div>
+
+              <ul className="divide-y flex-1">
+                {paginateArr(dashboard.newEvents, newEventPage, DASH_PAGE_SIZE).map(ev => (
+                  <li key={ev.id}>
+                    <Link to={`/events/${ev.id}`} className="block px-4 py-3 hover:bg-emerald-50 transition">
+                      <div className="font-medium text-gray-800 line-clamp-1">{ev.title}</div>
+                      <div className="text-xs text-gray-500 mt-1">Ngày tạo: {ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : "—"}</div>
+                    </Link>
+                  </li>
+                ))}
+
+                {!(dashboard.newEvents || []).length && (
+                  <li className="px-4 py-6 text-sm text-gray-500 text-center">Không có sự kiện mới</li>
+                )}
+              </ul>
+
+              {eventsWithNewPosts.length > 0 && (
+                <div className="px-4 py-3 border-t text-sm">
+                  <div className="text-gray-600 font-medium mb-2">Sự kiện có bài mới</div>
+                  <div className="flex flex-col gap-2">
+                    {eventsWithNewPosts.slice(0, 5).map(e => (
+                      <Link key={e.id} to={`/events/${e.id}`} className="text-sm text-emerald-700 hover:underline">Sự kiện #{e.id} — {e.count} bài mới</Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="px-4 py-3 border-t">
+                <Pagination
+                  page={newEventPage}
+                  totalPages={Math.max(1, Math.ceil((dashboard.newEvents || []).length / DASH_PAGE_SIZE))}
+                  onChange={setNewEventPage}
+                />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <h3 className="font-semibold flex items-center gap-2 text-emerald-700">
+                  <FiBarChart2 /> Sự kiện thu hút
+                </h3>
+                <Link to="/events" className="text-sm text-emerald-700 hover:underline">Xem tất cả</Link>
+              </div>
+
+              <ul className="divide-y flex-1">
+                {paginateArr((dashboard.trendingEvents || []).slice().sort((a,b)=> parseScore(b.description) - parseScore(a.description)), trendingPage, DASH_PAGE_SIZE).map(ev => (
+                  <li key={ev.id}>
+                    <Link to={`/events/${ev.id}`} className="block px-4 py-3 hover:bg-blue-50 transition">
+                      <div className="font-medium text-gray-800 line-clamp-1">
+                        {ev.title}
+                        {parseScore(ev.description) > 0 && (
+                          <span className="ml-2 inline-block text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Hot {parseScore(ev.description)}</span>
+                        )}
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+
+                {!(dashboard.trendingEvents || []).length && (
+                  <li className="px-4 py-6 text-sm text-gray-500 text-center">Không có dữ liệu</li>
+                )}
+              </ul>
+
+              <div className="px-4 py-3 border-t">
+                <Pagination
+                  page={trendingPage}
+                  totalPages={Math.max(1, Math.ceil((dashboard.trendingEvents || []).length / DASH_PAGE_SIZE))}
+                  onChange={setTrendingPage}
+                />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <h3 className="font-semibold flex items-center gap-2 text-emerald-700">
+                  <FiClock /> Bài viết mới
+                </h3>
+              </div>
+
+              <ul className="divide-y flex-1">
+                {paginateArr((dashboard.newPosts || []).slice().sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)), postPage, DASH_PAGE_SIZE).map(p => (
+                  <li key={p.id}>
+                    <Link to={`/events/${p.eventId}?post=${p.id}`} className="relative block px-4 py-3 hover:bg-purple-50 transition">
+                      <div className="text-sm text-gray-800 line-clamp-2 pr-16">{p.content || "(Không có nội dung)"}</div>
+                      <div className="text-xs text-gray-400 mt-1">{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : ""}</div>
+                    </Link>
+                  </li>
+                ))}
+
+                {!(dashboard.newPosts || []).length && (
+                  <li className="px-4 py-6 text-sm text-gray-500 text-center">Không có bài viết</li>
+                )}
+              </ul>
+
+              <div className="px-4 py-3 border-t">
+                <Pagination
+                  page={postPage}
+                  totalPages={Math.max(1, Math.ceil((dashboard.newPosts || []).length / DASH_PAGE_SIZE))}
+                  onChange={setPostPage}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Sự kiện nổi bật*/}
       <section ref={passionRef} id="passion" className="bg-gray-50 py-14">
         <div className="max-w-6xl mx-auto">
@@ -296,11 +506,19 @@ export default function Home() {
           {loading ? (
             <p className="text-center text-gray-600">Đang tải sự kiện...</p>
           ) : (
-            <div className="grid md:grid-cols-3 gap-6">
-              {filteredEvents.map((ev) => (
-                <EventCard key={ev.id} event={ev} status={myStatusByEvent[ev.id]} isFavorited={favoriteIds.has(String(ev.id))} onToggleFavorite={toggleFavorite} />
-              ))}
-            </div>
+            <>
+              <div className="grid md:grid-cols-3 gap-6">
+                {pagedEvents.map((ev) => (
+                  <EventCard key={ev.id} event={ev} status={myStatusByEvent[ev.id]} isFavorited={favoriteIds.has(String(ev.id))} onToggleFavorite={toggleFavorite} />
+                ))}
+              </div>
+
+              <div className="mt-6 flex items-center justify-center gap-3">
+                <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-3 py-1 border rounded disabled:opacity-50">Prev</button>
+                <div className="text-sm text-gray-600">Trang {page} / {totalPages}</div>
+                <button disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} className="px-3 py-1 border rounded disabled:opacity-50">Next</button>
+              </div>
+            </>
           )}
 
           {/* Button xem tất cả sự kiện */}

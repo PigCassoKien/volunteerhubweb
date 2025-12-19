@@ -55,6 +55,14 @@ public class EventRegistrationService {
             throw new RuntimeException("Không thể đăng ký sự kiện chưa được duyệt");
         }
 
+        // Prevent registering if event already started or is ongoing/ended
+        if (event.getStartDate() != null && LocalDateTime.now().isAfter(event.getStartDate())) {
+            throw new RuntimeException("Không thể đăng ký sau khi sự kiện đã bắt đầu");
+        }
+        if (event.getEndDate() != null && LocalDateTime.now().isAfter(event.getEndDate())) {
+            throw new RuntimeException("Không thể đăng ký sự kiện đã kết thúc");
+        }
+
         // parse dateOfBirth (frontend should send "yyyy-MM-dd")
         LocalDate dob = null;
         try {
@@ -173,6 +181,9 @@ public class EventRegistrationService {
             dto.setEventTitle(r.getEvent() != null ? r.getEvent().getTitle() : null);
             dto.setEventStartDate(r.getEvent() != null ? r.getEvent().getStartDate() : null);
             dto.setEventLocation(r.getEvent() != null ? r.getEvent().getLocation() : null);
+            dto.setCancellationReason(r.getCancellationReason());
+            dto.setCanceledAt(r.getCanceledAt());
+            dto.setCanceledByName(r.getCanceledBy() != null ? r.getCanceledBy().getFullName() : null);
             return dto;
         }).collect(Collectors.toList());
     }
@@ -212,6 +223,9 @@ public class EventRegistrationService {
             dto.setExperience(reg.getExperience());
             dto.setSkills(reg.getSkills());
             dto.setCertificateUrl(null); // placeholder if you later add certificate field
+            dto.setCancellationReason(reg.getCancellationReason());
+            dto.setCanceledAt(reg.getCanceledAt());
+            dto.setCanceledByName(reg.getCanceledBy() != null ? reg.getCanceledBy().getFullName() : null);
 
             return dto;
         }).collect(Collectors.toList());
@@ -242,16 +256,73 @@ public class EventRegistrationService {
         return modelMapper.map(reg, EventRegistrationDTO.class);
     }
 
-    public EventRegistrationDTO cancelRegistration(Long registrationId, String email) {
+    public EventRegistrationDTO cancelRegistration(Long registrationId, String email, String reason) {
         EventRegistration reg = registrationRepository.findById(registrationId).orElseThrow(() -> new RuntimeException("Registration not found"));
+        Event event = reg.getEvent();
+        // requester could be the registrant (owner) or a manager/admin
+        User requester = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
+
+        boolean isOwner = reg.getUser() != null && reg.getUser().getEmail().equals(email);
+        boolean isManager = requester.getRole() == UserRole.EVENT_MANAGER && event.getCreatedBy() != null && event.getCreatedBy().getId().equals(requester.getId());
+        boolean isAdmin = requester.getRole() != null && requester.getRole().toString().contains("ADMIN");
+
+        if (isOwner) {
+            // volunteers can only cancel before event start
+            if (event.getStartDate() != null && LocalDateTime.now().isAfter(event.getStartDate())) {
+                throw new RuntimeException("Không thể huỷ đăng ký sau khi sự kiện đã bắt đầu");
+            }
+        } else if (!isManager && !isAdmin) {
+            throw new RuntimeException("Unauthorized");
+        }
+
         reg.setStatus(RegistrationStatus.CANCELED);
         reg.setUpdatedAt(LocalDateTime.now());
+        reg.setCancellationReason(reason);
+        reg.setCanceledAt(LocalDateTime.now());
+        if (!isOwner) {
+            reg.setCanceledBy(requester);
+        } else {
+            reg.setCanceledBy(reg.getUser());
+        }
+
         registrationRepository.save(reg);
 
-        // NEW: notify user (if owner or manager triggered)
+        // notify the original registrant about cancellation
         notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.CANCELED);
 
-        return modelMapper.map(reg, EventRegistrationDTO.class);
+        EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
+        dto.setCancellationReason(reg.getCancellationReason());
+        dto.setCanceledAt(reg.getCanceledAt());
+        dto.setCanceledByName(reg.getCanceledBy() != null ? reg.getCanceledBy().getFullName() : null);
+        return dto;
+    }
+
+    // Mark all approved registrations as COMPLETED if event already ended
+    public void completeRegistrationsForEvent(Long eventId, String requesterEmail) {
+        Event event = eventRepository.findById(eventId).orElseThrow(() -> new RuntimeException("Event not found"));
+        User requester = userRepository.findByEmail(requesterEmail).orElseThrow(() -> new RuntimeException("User not found"));
+
+        boolean isManager = requester.getRole() == UserRole.EVENT_MANAGER && event.getCreatedBy() != null && event.getCreatedBy().getId().equals(requester.getId());
+        boolean isAdmin = requester.getRole() != null && requester.getRole().toString().contains("ADMIN");
+        if (!isManager && !isAdmin) throw new RuntimeException("Unauthorized");
+
+        if (event.getEndDate() == null) return; // nothing to do
+        if (!LocalDateTime.now().isAfter(event.getEndDate())) return; // not ended yet
+
+        List<EventRegistration> regs = registrationRepository.findByEventId(eventId);
+        for (EventRegistration r : regs) {
+            if (r.getStatus() != RegistrationStatus.COMPLETED) {
+                r.setStatus(RegistrationStatus.COMPLETED);
+                r.setCompletedAt(LocalDateTime.now());
+                registrationRepository.save(r);
+                // notify user
+                try {
+                    notificationService.notifyRegistrationStatusChange(r.getUser().getId(), eventId, RegistrationStatus.COMPLETED);
+                } catch (Exception ex) {
+                    // continue on errors
+                }
+            }
+        }
     }
 
     // Delete

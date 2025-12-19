@@ -107,10 +107,21 @@ public class EventRegistrationController {
             @Parameter(name = "Authorization", in = ParameterIn.HEADER, schema = @Schema(type = "string"), example = "Bearer <token>", required = true)
     })
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<EventRegistrationDTO> cancelRegistration(@PathVariable Long id, Authentication authentication) {
-        String email = authentication.getName();
-        return ResponseEntity.ok(registrationService.cancelRegistration(id, email));
-    }
+        public ResponseEntity<EventRegistrationDTO> cancelRegistration(@PathVariable Long id,
+                                                                                                                                  @RequestBody(required = false) com.example.volunteerhub.dto.CancelRegistrationRequestDTO body,
+                                                                                                                                  Authentication authentication) {
+                String email = authentication.getName();
+                String reason = body != null ? body.getReason() : null;
+                return ResponseEntity.ok(registrationService.cancelRegistration(id, email, reason));
+        }
+
+        @PutMapping("/complete-event/{eventId}")
+        @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER','ROLE_ADMIN')")
+        public ResponseEntity<Void> completeEventRegistrations(@PathVariable Long eventId, Authentication authentication) {
+                String email = authentication.getName();
+                registrationService.completeRegistrationsForEvent(eventId, email);
+                return ResponseEntity.ok().build();
+        }
 
     @DeleteMapping("/delete/{id}")
     @Operation(summary = "Delete event registration", responses = {

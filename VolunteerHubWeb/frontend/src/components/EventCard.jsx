@@ -12,12 +12,21 @@ const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () =
   } = event;
 
   const [approvedCount, setApprovedCount] = useState(0);
+  const [localStatus, setLocalStatus] = useState(() => {
+    if (!status) return null;
+    return typeof status === "string" ? status : status?.status;
+  });
 
   useEffect(() => {
     const fetchApprovedCount = async () => {
       try {
-        const res = await axios.get(`/registrations/count/${id}`, { params: { status: "APPROVED" } });
-        setApprovedCount(res.data ?? 0);
+        const [approvedRes, completedRes] = await Promise.all([
+          axios.get(`/registrations/count/${id}`, { params: { status: "APPROVED" } }).catch(() => ({ data: 0 })),
+          axios.get(`/registrations/count/${id}`, { params: { status: "COMPLETED" } }).catch(() => ({ data: 0 }))
+        ]);
+        const approved = Number(approvedRes?.data ?? 0);
+        const completed = Number(completedRes?.data ?? 0);
+        setApprovedCount(approved + completed);
       } catch (e) {
         setApprovedCount(0);
       }
@@ -28,24 +37,65 @@ const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () =
   const capacity = maxParticipants ?? 50;
   const progress = capacity > 0 ? Math.min(100, (approvedCount / capacity) * 100) : 0;
 
-  const date = new Date(startDate).toLocaleDateString("vi-VN");
-  const time = `${new Date(startDate).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} - ${new Date(endDate).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`;
+  const date = startDate ? new Date(startDate).toLocaleDateString("vi-VN") : "";
+  const time = startDate && endDate
+    ? `${new Date(startDate).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} - ${new Date(endDate).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`
+    : "";
+
+  // derive status string and registration id (if any)
+  const statusStr = typeof status === "string" ? status : status?.status || localStatus;
+  const regId = typeof status === "object" ? status?.regId : null;
+
+  // compute realtime time state
+  const nowMs = Date.now();
+  const startMs = startDate ? new Date(startDate).getTime() : null;
+  const endMs = endDate ? new Date(endDate).getTime() : null;
+  let timeState = "upcoming"; // upcoming | ongoing | ended
+  if (startMs && endMs) {
+    if (nowMs < startMs) timeState = "upcoming";
+    else if (nowMs >= startMs && nowMs <= endMs) timeState = "ongoing";
+    else timeState = "ended";
+  } else if (endMs) {
+    timeState = nowMs <= endMs ? "ongoing" : "ended";
+  }
 
   const renderButton = () => {
-    if (status === "APPROVED") {
+    // On cards/lists: don't provide cancel action. If user is APPROVED and event not ended,
+    // show a blue "Đã đăng ký" link to detail. If approved but ended, show neutral label.
+    const regStatus = localStatus || statusStr;
+    if (regStatus === "APPROVED") {
+      if (timeState !== "ended") {
+        return (
+          <Link to={`/events/${id}`} className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">
+            Đã đăng ký
+          </Link>
+        );
+      }
       return (
-        <Link to={`/events/${id}`} className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">
+        <Link to={`/events/${id}`} className="px-4 py-2 rounded-lg bg-gray-200 text-gray-600">
           Đã đăng ký
         </Link>
       );
     }
-    if (status === "PENDING") {
+
+    if ((localStatus || statusStr) === "PENDING") {
       return (
         <Link to={`/events/${id}`} className="px-4 py-2 rounded-lg bg-yellow-400 text-black hover:bg-yellow-500">
           Đang chờ xác nhận
         </Link>
       );
     }
+
+    // If event is not APPROVED or already started/ended -> disable register
+    const canRegister = eventStatus === "APPROVED" && timeState === "upcoming";
+    if (!canRegister) {
+      return (
+        <button className="w-full px-4 py-2 rounded-lg bg-gray-200 text-gray-500 cursor-not-allowed text-center" title={eventStatus !== "APPROVED" ? "Sự kiện chưa mở đăng ký" : timeState === "ongoing" ? "Sự kiện đang diễn ra" : "Sự kiện đã kết thúc"}>
+          Đăng ký
+        </button>
+      );
+    }
+
     return (
       <Link
         to={`/events/${id}`}
@@ -55,6 +105,29 @@ const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () =
       </Link>
     );
   };
+
+    // keep handler available but card won't render cancel UI; cancellation happens in EventDetail
+    async function handleCancelRegistration(e) {
+      e.stopPropagation();
+      const targetRegId = regId;
+      if (!targetRegId) {
+        if (window.confirm("Không tìm thấy đăng ký. Muốn mở chi tiết sự kiện?")) {
+          window.location.href = `/events/${id}`;
+        }
+        return;
+      }
+
+      if (!window.confirm("Bạn có chắc muốn hủy đăng ký?")) return;
+
+      try {
+        await axios.put(`/registrations/cancel/${targetRegId}`);
+        setLocalStatus("CANCELED");
+        setApprovedCount((c) => Math.max(0, c - 1));
+      } catch (err) {
+        console.error("Hủy đăng ký thất bại", err);
+        alert("Hủy đăng ký thất bại. Vui lòng thử lại.");
+      }
+    }
 
   const imgSrc = getFileUrl(imageFile);
 
@@ -81,7 +154,7 @@ const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () =
                     : eventStatus === "CANCELED" ? "bg-red-600"
                       : "bg-emerald-600"}`}
         >
-          {eventStatus === "APPROVED" ? "Đang mở"
+          {eventStatus === "APPROVED" ? "Đã phê duyệt"
             : eventStatus === "PENDING" ? "Đang xử lý"
               : eventStatus === "REJECTED" ? "Đã từ chối"
                 : eventStatus === "COMPLETED" ? "Đã hoàn thành"
@@ -93,15 +166,26 @@ const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () =
           {category?.name || "Khác"}
         </span>
 
-        {status === "APPROVED" && (
+        {(localStatus || statusStr) === "APPROVED" && timeState !== "ended" && (
           <span className="absolute bottom-3 left-3 bg-blue-600 text-white text-xs px-3 py-1 rounded-full">
-            Đã Đăng ký
+            Đã đăng ký
           </span>
         )}
-        {status === "PENDING" && (
+        {(localStatus || statusStr) === "PENDING" && (
           <span className="absolute bottom-3 left-3 bg-yellow-400 text-yellow-900 text-xs px-3 py-1 rounded-full">
             Đang chờ xác nhận
           </span>
+        )}
+
+        {/* realtime time state badge */}
+        {timeState === "upcoming" && (
+          <span className="absolute top-12 left-3 bg-sky-600 text-white text-xs px-3 py-1 rounded-full">Chưa diễn ra</span>
+        )}
+        {timeState === "ongoing" && (
+          <span className="absolute top-12 left-3 bg-amber-600 text-white text-xs px-3 py-1 rounded-full">Đang diễn ra</span>
+        )}
+        {timeState === "ended" && (
+          <span className="absolute top-12 left-3 bg-gray-600 text-white text-xs px-3 py-1 rounded-full">Đã kết thúc</span>
         )}
       </div>
 
@@ -148,7 +232,7 @@ const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () =
 
 EventCard.propTypes = {
   event: PropTypes.object.isRequired,
-  status: PropTypes.string,
+  status: PropTypes.oneOfType([PropTypes.string, PropTypes.object]),
   isFavorited: PropTypes.bool,
   onToggleFavorite: PropTypes.func,
 };

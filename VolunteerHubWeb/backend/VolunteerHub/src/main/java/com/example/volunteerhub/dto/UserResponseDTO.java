@@ -20,4 +20,6 @@ public class UserResponseDTO {
     private VerificationStatus verificationStatus;
     private LocalDateTime createdAt;
     private LocalDateTime lastLogin;
+    private Integer eventsCount;
+    private Integer hours;
 }

@@ -21,6 +21,11 @@ import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+
+import com.example.volunteerhub.dto.CommunityStatsDTO;
+import com.example.volunteerhub.dto.VolunteerRankDTO;
 
 @RestController
 @RequestMapping("/api/users")
@@ -50,15 +55,11 @@ public class UserController {
     }, parameters = {
             @Parameter(name = "Authorization", in = ParameterIn.HEADER, schema = @Schema(type = "string"), example = "Bearer <token>", required = true)
     })
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UserResponseDTO> getUserById(@PathVariable Long id, Authentication authentication) {
-        if (authentication == null) return ResponseEntity.status(401).build();
-        String currentUserEmail = authentication.getName();
         try {
-            UserResponseDTO dto = userService.getUserById(id, currentUserEmail);
+            // If caller is authenticated, we could use more detailed service method in future.
+            UserResponseDTO dto = userService.getPublicProfileById(id);
             return ResponseEntity.ok(dto);
-        } catch (org.springframework.security.access.AccessDeniedException ade) {
-            return ResponseEntity.status(403).build();
         } catch (RuntimeException ex) {
             return ResponseEntity.status(404).build();
         }
@@ -96,6 +97,27 @@ public class UserController {
         return ResponseEntity.ok(userService.searchVolunteers(searchRequest));
     }
 
+    @GetMapping("/volunteers")
+    public ResponseEntity<Page<UserResponseDTO>> volunteers(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "12") int size) {
+        Page<UserResponseDTO> p = userService.searchVolunteersPage(q, page, size);
+        return ResponseEntity.ok(p);
+    }
+
+    @GetMapping("/community/stats")
+    public ResponseEntity<CommunityStatsDTO> communityStats() {
+        CommunityStatsDTO stats = userService.getCommunityStats();
+        return ResponseEntity.ok(stats);
+    }
+
+    @GetMapping("/volunteers/top")
+    public ResponseEntity<java.util.List<VolunteerRankDTO>> topVolunteers(@RequestParam(defaultValue = "10") int limit) {
+        java.util.List<VolunteerRankDTO> list = userService.getTopVolunteers(limit);
+        return ResponseEntity.ok(list);
+    }
+
     @PutMapping("/update/{id}")
     @Operation(summary = "Update user information", responses = {
             @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserResponseDTO.class))),
@@ -122,6 +144,27 @@ public class UserController {
         String adminEmail = authentication.getName();
         UserResponseDTO dto = userService.assignRole(request, adminEmail);
         return ResponseEntity.ok(dto);
+    }
+
+    @PostMapping("/upload-avatar/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> uploadAvatar(@PathVariable Long id,
+                                          @RequestParam("avatar") org.springframework.web.multipart.MultipartFile avatar,
+                                          @RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader != null && authHeader.startsWith("Bearer ") ? authHeader.substring(7) : authHeader;
+            String currentUserEmail = jwtService.extractClaims(token).getSubject();
+            String fileName = userService.uploadAvatar(id, avatar, currentUserEmail);
+            java.util.Map<String, String> res = new java.util.HashMap<>();
+            res.put("fileName", fileName);
+            return ResponseEntity.ok(res);
+        } catch (org.springframework.security.access.AccessDeniedException ade) {
+            return ResponseEntity.status(403).build();
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(400).body(java.util.Map.of("error", ex.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(java.util.Map.of("error", "upload_failed"));
+        }
     }
 
     @PutMapping("/lock/{id}")
