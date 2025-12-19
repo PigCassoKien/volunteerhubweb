@@ -316,47 +316,7 @@ export default function EventDetail() {
               </div>
             </div>
 
-            {/* Right: Stats */}
-            <div className="space-y-3">
-              <StatItem
-                label="Địa điểm"
-                value={event.location}
-                icon={<i className="fa-solid fa-location-dot" />}
-              />
-              <StatItem
-                label="Thời gian"
-                value={`${new Date(event.startDate).toLocaleString("vi-VN")} - ${new Date(event.endDate).toLocaleString("vi-VN")}`}
-                icon={<i className="fa-regular fa-clock" />}
-              />
-              <StatItem
-                label="Sức chứa"
-                value={`${capacity} người`}
-                icon={<i className="fa-solid fa-users" />}
-              />
-              <StatItem
-                label="Người tạo"
-                value={event.createdByFullName || "Quản lý sự kiện"}
-                icon={<i className="fa-regular fa-user" />}
-              />
-            <div className="md:col-span-1 flex items-center justify-end">
-              <div className="bg-white/90 rounded-2xl p-3 text-gray-800 shadow-md w-full md:w-auto">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-xs text-gray-500">Đã duyệt</div>
-                    <div className="font-semibold text-lg">{approvedCount}/{capacity}</div>
-                  </div>
-                  <div className="w-20">
-                    <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-2 bg-emerald-600 rounded-full" style={{ width: `${progress}%` }} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex justify-center">
-                  {renderRegisterButton()}
-                </div>
-              </div>
-            </div>
+            {/* Banner: left only (stats moved to aside below) */}
           </div>
         </div>
       </div>
@@ -405,20 +365,38 @@ export default function EventDetail() {
             <div className="mt-6">{renderRegisterButton()}</div>
           </div>
 
-          {/* RIGHT: STATS */}
-          <div className="space-y-3">
-            <StatItem label="Địa điểm" value={event.location} icon={<i className="fa-solid fa-location-dot" />} />
-            <StatItem
-              label="Thời gian"
-              value={new Date(event.startDate).toLocaleString("vi-VN")}
-              icon={<i className="fa-regular fa-clock" />}
-            />
-            <StatItem label="Sức chứa" value={`${capacity} người`} icon={<i className="fa-solid fa-users" />} />
-            <StatItem
-              label="Người tạo"
-              value={event.createdByFullName}
-              icon={<i className="fa-regular fa-user" />}
-            />
+          {/* RIGHT: ASIDE - sticky register + stats */}
+          <div className="space-y-4 md:sticky md:top-28">
+            <div className="bg-white rounded-2xl p-4 text-gray-800 shadow-md">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-xs text-gray-500">Đã duyệt</div>
+                  <div className="font-semibold text-lg">{approvedCount}/{capacity}</div>
+                </div>
+                <div className="w-24">
+                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="h-2 bg-emerald-600 rounded-full" style={{ width: `${progress}%` }} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 flex justify-center">{renderRegisterButton()}</div>
+            </div>
+
+            <div className="space-y-3">
+              <StatItem label="Địa điểm" value={event.location} icon={<i className="fa-solid fa-location-dot" />} />
+              <StatItem
+                label="Thời gian"
+                value={`${new Date(event.startDate).toLocaleString("vi-VN")} - ${new Date(event.endDate).toLocaleString("vi-VN")}`}
+                icon={<i className="fa-regular fa-clock" />}
+              />
+              <StatItem label="Tối đa" value={`${capacity} người`} icon={<i className="fa-solid fa-users" />} />
+              <StatItem
+                label="Người tạo"
+                value={event.createdByFullName}
+                icon={<i className="fa-regular fa-user" />}
+              />
+            </div>
           </div>
         </div>
 
@@ -490,7 +468,6 @@ export default function EventDetail() {
           onSubmit={submitRegistration}
         />
       )}
-    </div>
     </div>
   );
 }

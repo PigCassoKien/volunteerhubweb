@@ -269,13 +269,24 @@ export default function Home() {
         const data = res.data || { newEvents: [], trendingEvents: [], newPosts: [] };
         setDashboard(data);
 
-        // build eventsWithNewPosts summary
+        // build eventsWithNewPosts summary (include event title when available)
         const map = {};
         (data.newPosts || []).forEach(p => {
           if (!p || !p.eventId) return;
           map[p.eventId] = (map[p.eventId] || 0) + 1;
         });
-        const arr = Object.keys(map).map(id => ({ id: Number(id), count: map[id] })).sort((a,b) => b.count - a.count);
+
+        const findTitle = (id) => {
+          const nid = Number(id);
+          const fromNew = (data.newEvents || []).find(e => e.id === nid);
+          if (fromNew) return fromNew.title;
+          const fromTrending = (data.trendingEvents || []).find(e => e.id === nid);
+          if (fromTrending) return fromTrending.title;
+          return null;
+        };
+
+        const arr = Object.keys(map).map(id => ({ id: Number(id), count: map[id], title: findTitle(id) }))
+          .sort((a,b) => b.count - a.count);
         setEventsWithNewPosts(arr);
       } catch (err) {
         console.error('Không thể tải dashboard:', err);
@@ -395,7 +406,7 @@ export default function Home() {
                   <div className="text-gray-600 font-medium mb-2">Sự kiện có bài mới</div>
                   <div className="flex flex-col gap-2">
                     {eventsWithNewPosts.slice(0, 5).map(e => (
-                      <Link key={e.id} to={`/events/${e.id}`} className="text-sm text-emerald-700 hover:underline">Sự kiện #{e.id} — {e.count} bài mới</Link>
+                      <Link key={e.id} to={`/events/${e.id}`} className="text-sm text-emerald-700 hover:underline">{e.title || `Sự kiện ${e.id}`} — {e.count} bài mới</Link>
                     ))}
                   </div>
                 </div>
@@ -425,9 +436,12 @@ export default function Home() {
                       <div className="font-medium text-gray-800 line-clamp-1">
                         {ev.title}
                         {parseScore(ev.description) > 0 && (
-                          <span className="ml-2 inline-block text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Hot {parseScore(ev.description)}</span>
+                          <span className="ml-2 inline-block text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Hot </span>
                         )}
                       </div>
+                      {ev.status === 'COMPLETED' && (ev.registeredCount != null) && (
+                        <div className="text-xs text-gray-500 mt-1">Số đăng ký: {ev.registeredCount}</div>
+                      )}
                     </Link>
                   </li>
                 ))}
@@ -457,8 +471,11 @@ export default function Home() {
                 {paginateArr((dashboard.newPosts || []).slice().sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)), postPage, DASH_PAGE_SIZE).map(p => (
                   <li key={p.id}>
                     <Link to={`/events/${p.eventId}?post=${p.id}`} className="relative block px-4 py-3 hover:bg-purple-50 transition">
-                      <div className="text-sm text-gray-800 line-clamp-2 pr-16">{p.content || "(Không có nội dung)"}</div>
+                      <div className="text-sm text-gray-800 line-clamp-2">{p.content || "(Không có nội dung)"}</div>
                       <div className="text-xs text-gray-400 mt-1">{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : ""}</div>
+                      {(p.eventTitle) && (
+                        <div className="text-[11px] text-gray-500 italic mt-1">{p.eventTitle}</div>
+                      )}
                     </Link>
                   </li>
                 ))}

@@ -86,6 +86,7 @@ public class CommentService {
 
         CommentDTO dto = modelMapper.map(comment, CommentDTO.class);
         dto.setUserId(comment.getUser().getId());
+        dto.setUserAvatarFile(comment.getUser() != null ? comment.getUser().getAvatarFile() : null);
         dto.setPostId(comment.getPost().getId());
         dto.setParentCommentId(comment.getParentComment() != null ? comment.getParentComment().getId() : null);
         dto.setCreatedAt(comment.getCreatedAt());
@@ -113,6 +114,7 @@ public class CommentService {
 
         CommentDTO dto = modelMapper.map(comment, CommentDTO.class);
         dto.setUserId(comment.getUser().getId());
+        dto.setUserAvatarFile(comment.getUser() != null ? comment.getUser().getAvatarFile() : null);
         dto.setPostId(post.getId());
         dto.setParentCommentId(comment.getParentComment() != null ? comment.getParentComment().getId() : null);
         dto.setCreatedAt(comment.getCreatedAt());
@@ -133,6 +135,7 @@ public class CommentService {
         List<CommentDTO> dtos = flat.stream().map(c -> {
             CommentDTO dto = modelMapper.map(c, CommentDTO.class);
             dto.setUserId(c.getUser().getId());
+            dto.setUserAvatarFile(c.getUser() != null ? c.getUser().getAvatarFile() : null);
             dto.setUserFullName(c.getUser().getFullName());
             dto.setParentCommentId(c.getParentComment() != null ? c.getParentComment().getId() : null);
             boolean canDelete = false;
@@ -167,6 +170,7 @@ public class CommentService {
 
         CommentDTO dto = modelMapper.map(comment, CommentDTO.class);
         dto.setUserId(comment.getUser().getId());
+            dto.setUserAvatarFile(comment.getUser() != null ? comment.getUser().getAvatarFile() : null);
         dto.setPostId(comment.getPost().getId());
         dto.setParentCommentId(comment.getParentComment() != null ? comment.getParentComment().getId() : null);
         dto.setCreatedAt(comment.getCreatedAt());

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FiUser, FiMail, FiLock, FiPhone, FiMapPin } from "react-icons/fi";
+import { FiEye, FiEyeOff } from "react-icons/fi";
 import axios from "../../api/axios";
 
 export default function Register() {
@@ -16,6 +17,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otp, setOtp] = useState("");
+  const [msg, setMsg] = useState("");
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -26,11 +28,11 @@ export default function Register() {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
-      alert("Mật khẩu xác nhận không khớp!");
+      setMsg("Mật khẩu xác nhận không khớp!");
       return;
     }
     if (formData.password.length < 8) {
-      alert("Mật khẩu phải có ít nhất 8 ký tự");
+      setMsg("Mật khẩu phải có ít nhất 8 ký tự");
       return;
     }
 
@@ -43,12 +45,13 @@ export default function Register() {
         password: formData.password,
         phoneNumber: formData.phoneNumber.trim(),
         address: formData.address.trim(),
-        role: formData.role,
+        role: "VOLUNTEER",
       });
-      alert("Đăng ký thành công! Mã OTP đã được gửi đến email của bạn 📩");
+      setMsg("Đăng ký thành công! Mã OTP đã được gửi đến email của bạn 📩");
       setShowOtpModal(true);
     } catch (err) {
-      alert(err.response?.data?.message || "Có lỗi xảy ra, vui lòng thử lại");
+      const m = err.response?.data?.message || err.response?.data?.error || "Có lỗi xảy ra, vui lòng thử lại";
+      setMsg(m);
     } finally {
       setLoading(false);
     }
@@ -57,7 +60,7 @@ export default function Register() {
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     if (otp.length !== 6) {
-      alert("Vui lòng nhập đủ 6 chữ số");
+      setMsg("Vui lòng nhập đủ 6 chữ số");
       return;
     }
 
@@ -77,7 +80,8 @@ export default function Register() {
       // Chuyển trang
       setTimeout(() => navigate("/"), 300);
     } catch (err) {
-      alert(err.message || "Mã OTP sai hoặc đã hết hạn");
+      const m = err.response?.data?.message || err.message || "Mã OTP sai hoặc đã hết hạn";
+      setMsg(m);
     }
   };
 
@@ -118,32 +122,6 @@ export default function Register() {
           <InputField icon={<FiMapPin />} label="Địa chỉ" name="address" value={formData.address} onChange={handleChange} placeholder="Nhập địa chỉ" />
           <InputField icon={<FiLock />} label="Mật khẩu" name="password" type="password" value={formData.password} onChange={handleChange} placeholder="Nhập mật khẩu" />
           <InputField icon={<FiLock />} label="Xác nhận mật khẩu" name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleChange} placeholder="Nhập lại mật khẩu" />
-          <div>
-            <label className="block text-gray-600 text-sm mb-1">Vai trò</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="role"
-                  value="VOLUNTEER"
-                  checked={formData.role === "VOLUNTEER"}
-                  onChange={handleChange}
-                />
-                <span>Tình nguyện viên</span>
-              </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="role"
-                  value="EVENT_MANAGER"
-                  checked={formData.role === "EVENT_MANAGER"}
-                  onChange={handleChange}
-                />
-                <span>Quản lý sự kiện</span>
-              </label>
-            </div>
-          </div>
 
           <button
             type="submit"
@@ -152,6 +130,7 @@ export default function Register() {
           >
             {loading ? "Đang tạo tài khoản..." : "Đăng ký"}
           </button>
+          {msg && <div className="text-center text-sm mt-2 text-red-600">{msg}</div>}
 
           <p className="text-sm text-center text-gray-600 mt-2">
             Đã có tài khoản?{" "}
@@ -220,12 +199,21 @@ export default function Register() {
 
 // Component reusable cho Input
 function InputField({ icon, label, className = "", ...props }) {
+  const [show, setShow] = useState(false);
+  const isPassword = props.type === "password";
+  const actualType = isPassword ? (show ? "text" : "password") : props.type;
+
   return (
     <div className={`flex-1 ${className}`}>
       <label className="block text-gray-600 text-sm mb-1">{label}</label>
       <div className="flex items-center border rounded-lg px-3 py-2">
         {icon}
-        <input {...props} className="w-full outline-none ml-2" />
+        <input {...props} type={actualType} className="w-full outline-none ml-2" />
+        {isPassword && (
+          <button type="button" onClick={() => setShow(s => !s)} className="ml-2 text-gray-500">
+            {show ? <FiEyeOff /> : <FiEye />}
+          </button>
+        )}
       </div>
     </div>
   );

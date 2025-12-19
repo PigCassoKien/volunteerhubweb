@@ -1,92 +1,124 @@
 /* Service Worker - push handler
-   - robustly parse event.data as JSON or text
-   - show notification with title/body/url
+   - Robust payload parsing (json or text)
+   - Show richer, nicer notification layout (title, body, image, badge, actions)
 */
 
-self.addEventListener('push', event => {
-  let data = { title: 'Thông báo', body: '', url: '/' };
-
-  if (event.data) {
+function safeParsePushData(event) {
+  const defaultData = { title: 'VolunteerHub', body: '', url: '/', tag: undefined };
+  if (!event.data) return defaultData;
+  const tryParse = (s) => {
     try {
-      const parsed = event.data.json();
-      if (parsed && typeof parsed === 'object') {
-        data.title = parsed.title || data.title;
-        data.body = parsed.body || '';
-        data.url = parsed.url || '/';
-      } else {
-        data.body = String(parsed);
-      }
-      console.log('[SW] push received (json)', parsed);
-    } catch (err) {
-      try {
-        const text = event.data.text();
-        try {
-          const parsedText = JSON.parse(text);
-          data.title = parsedText.title || data.title;
-          data.body = parsedText.body || text;
-          data.url = parsedText.url || '/';
-          console.log('[SW] push received (text -> json)', parsedText);
-        } catch (e2) {
-          data.body = text;
-          console.log('[SW] push received (text)', text);
-        }
-      } catch (e3) {
-        console.warn('[SW] push event contains data but could not be read', e3);
-      }
+      return JSON.parse(s);
+    } catch (e) {
+      return null;
     }
-  }
-
-  const options = {
-    body: data.body || '',
-    data: { url: data.url || '/' },
-    icon: '/logo192.png'
   };
 
-  event.waitUntil(self.registration.showNotification(data.title, options));
+  try {
+    const parsed = event.data.json();
+    if (parsed && typeof parsed === 'object') {
+      // If some fields are themselves JSON strings, try to unwrap them
+      const copy = { ...defaultData, ...parsed };
+      if (typeof copy.body === 'string') {
+        const inner = tryParse(copy.body);
+        if (inner && typeof inner === 'object') Object.assign(copy, inner);
+      }
+      if (typeof copy.title === 'string') {
+        const innerT = tryParse(copy.title);
+        if (innerT && typeof innerT === 'object') Object.assign(copy, innerT);
+      }
+      return copy;
+    }
+    return { ...defaultData, body: String(parsed) };
+  } catch (e) {
+    try {
+      const text = event.data.text();
+      const parsed = tryParse(text);
+      if (parsed && typeof parsed === 'object') return { ...defaultData, ...parsed };
+      // also try to see if text contains an embedded JSON object
+      const maybeJsonStart = text.indexOf('{');
+      if (maybeJsonStart >= 0) {
+        const substr = text.slice(maybeJsonStart);
+        const parsedInner = tryParse(substr);
+        if (parsedInner && typeof parsedInner === 'object') return { ...defaultData, ...parsedInner };
+      }
+      return { ...defaultData, body: text };
+    } catch (e3) {
+      return defaultData;
+    }
+  }
+}
+
+self.addEventListener('push', (event) => {
+  const data = safeParsePushData(event);
+
+  const title = data.title || 'VolunteerHub';
+  const body = data.body || '';
+  const url = data.url || '/';
+
+  const options = {
+    // Build a friendly, multi-line body if structured content available
+    body: buildNotificationBody(data),
+    icon: data.icon || '/logo192.png',
+    badge: data.badge || '/logo192.png',
+    image: data.image || undefined,
+    tag: data.tag || `vh-${data.eventId || Date.now()}`,
+    renotify: true,
+    vibrate: [100, 50, 100],
+    timestamp: Date.now(),
+    data: { url, payload: data },
+    actions: data.url ? [
+      { action: 'open', title: 'Mở', icon: '/icons/open.png' },
+      { action: 'dismiss', title: 'Đóng', icon: '/icons/close.png' }
+    ] : []
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
-self.addEventListener('notificationclick', event => {
+self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const action = event.action;
   const url = event.notification.data?.url || '/';
-  event.waitUntil(clients.openWindow(url));
-});
-self.addEventListener('push', event => {
-  let data = { title: 'Thông báo', body: '', url: '/' };
-    if (event.data) {
-      try {
-        // Prefer structured JSON payload
-        data = event.data.json();
-        console.log('[sw] push received payload (json):', data);
-      } catch (e1) {
-        try {
-          // Fallback: some endpoints deliver text payloads
-          const text = event.data.text();
-          // try parse as JSON, otherwise treat as plain body
-          try {
-            const parsed = JSON.parse(text);
-            data = parsed;
-            console.log('[sw] push received payload (parsed text->json):', data);
-          } catch (e2) {
-            data.body = text;
-            console.log('[sw] push received payload (text):', text);
-          }
-        } catch (e3) {
-          console.error('[sw] failed to read payload', e3);
-        }
-      }
-    }
+
+  if (action === 'dismiss') return;
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Thông báo', {
-      body: data.body || '',
-      data: { url: data.url || '/' }, // phải là object
-      icon: '/icons/icon-192x192.png', // optional
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url === url && 'focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(url);
     })
   );
 });
 
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-  const url = event.notification.data?.url || '/';
-  event.waitUntil(clients.openWindow(url));
-});
+// helper: compose a friendly body text from structured payload
+function buildNotificationBody(data) {
+  // Prefer explicit content fields
+  if (data.preview) return data.preview;
+  const parts = [];
+  if (data.subtitle) parts.push(data.subtitle);
+  if (data.eventTitle) parts.push(`Sự kiện: ${data.eventTitle}`);
+  if (data.organizer) parts.push(`Ban tổ chức: ${data.organizer}`);
+  if (data.body && typeof data.body === 'string') {
+    // If body looks like JSON serialized string, try to parse
+    const trimmed = data.body.trim();
+    if ((trimmed.startsWith('{') || trimmed.startsWith('['))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.content) parts.push(parsed.content);
+          else parts.push(JSON.stringify(parsed));
+        }
+      } catch (e) {
+        parts.push(data.body);
+      }
+    } else {
+      parts.push(data.body);
+    }
+  }
+  // Fallback: single-line summary
+  if (parts.length === 0 && data.title) return data.title;
+  return parts.join('\n');
+}

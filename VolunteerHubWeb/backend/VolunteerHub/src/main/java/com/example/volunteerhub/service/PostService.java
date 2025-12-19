@@ -97,6 +97,7 @@ public class PostService {
         PostDTO dto = modelMapper.map(post, PostDTO.class);
         dto.setUserId(user.getId());
         dto.setUserFullName(user.getFullName());
+        dto.setUserAvatarFile(user.getAvatarFile());
         dto.setCanDelete(true); // creator can delete own post
         return dto;
     }
@@ -129,6 +130,7 @@ public class PostService {
         PostDTO dto = modelMapper.map(post, PostDTO.class);
         dto.setUserId(post.getUser() != null ? post.getUser().getId() : null);
         dto.setUserFullName(post.getUser() != null ? post.getUser().getFullName() : null);
+        dto.setUserAvatarFile(post.getUser() != null ? post.getUser().getAvatarFile() : null);
 
         boolean canDelete = false;
         if (requester != null) {
@@ -180,6 +182,7 @@ public class PostService {
                     PostDTO dto = modelMapper.map(p, PostDTO.class);
                     dto.setUserId(p.getUser() != null ? p.getUser().getId() : null);
                     dto.setUserFullName(p.getUser() != null ? p.getUser().getFullName() : null);
+                    dto.setUserAvatarFile(p.getUser() != null ? p.getUser().getAvatarFile() : null);
 
                     boolean canDelete = false;
                     if (requester != null) {
@@ -227,6 +230,7 @@ public class PostService {
         PostDTO dto = modelMapper.map(post, PostDTO.class);
         dto.setUserId(post.getUser() != null ? post.getUser().getId() : null);
         dto.setUserFullName(post.getUser() != null ? post.getUser().getFullName() : null);
+        dto.setUserAvatarFile(post.getUser() != null ? post.getUser().getAvatarFile() : null);
         // compute canDelete for requester: owner/manager/admin
         boolean canDelete = false;
         if (requester != null) {
@@ -300,6 +304,7 @@ public class PostService {
         PostDTO dto = modelMapper.map(post, PostDTO.class);
         dto.setUserId(post.getUser() != null ? post.getUser().getId() : null);
         dto.setUserFullName(post.getUser() != null ? post.getUser().getFullName() : null);
+        dto.setUserAvatarFile(post.getUser() != null ? post.getUser().getAvatarFile() : null);
         dto.setCanDelete(true);
         return dto;
     }
@@ -328,6 +333,7 @@ public class PostService {
         PostDTO dto = modelMapper.map(post, PostDTO.class);
         dto.setUserId(post.getUser() != null ? post.getUser().getId() : null);
         dto.setUserFullName(post.getUser() != null ? post.getUser().getFullName() : null);
+        dto.setUserAvatarFile(post.getUser() != null ? post.getUser().getAvatarFile() : null);
         dto.setCanDelete(false);
         return dto;
     }

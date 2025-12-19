@@ -46,11 +46,36 @@ export default function AdminDashboard() {
     return arr.slice(start, start + PAGE_SIZE);
   };
 
-  const sortedTrendingEvents = [...stats.trendingEvents].sort(
-    (a, b) =>
-      (approvedCountByEvent[b.id] ?? 0) -
-      (approvedCountByEvent[a.id] ?? 0)
-  );
+  const sortedTrendingEvents = (() => {
+    const timeStateWeight = (ev) => {
+      try {
+        const now = Date.now();
+        const startMs = ev.startDate ? new Date(ev.startDate).getTime() : null;
+        const endMs = ev.endDate ? new Date(ev.endDate).getTime() : null;
+        // upcoming (not started) -> 0, ongoing -> 1, ended -> 2
+        if (startMs && now < startMs) return 0;
+        if (startMs && endMs && now >= startMs && now <= endMs) return 1;
+        if (endMs && now <= endMs) return 1;
+        return 2;
+      } catch (e) {
+        return 2;
+      }
+    };
+
+    return [...(stats.trendingEvents || [])].sort((a, b) => {
+      const wa = timeStateWeight(a);
+      const wb = timeStateWeight(b);
+      if (wa !== wb) return wa - wb; // smaller weight first (upcoming -> ongoing -> ended)
+
+      // tie-breaker: approved+completed counts (descending)
+      const ca = approvedCountByEvent[a.id] ?? 0;
+      const cb = approvedCountByEvent[b.id] ?? 0;
+      if (cb !== ca) return cb - ca;
+
+      // fallback: keep original order by id
+      return (a.id || 0) - (b.id || 0);
+    });
+  })();
 
   useEffect(() => setNewEventPage(1), [stats.newEvents]);
   useEffect(() => setTrendingPage(1), [stats.trendingEvents]);
@@ -61,11 +86,14 @@ export default function AdminDashboard() {
         const results = await Promise.all(
           stats.trendingEvents.map(async (ev) => {
             try {
-              const res = await axios.get(
-                `/registrations/count/${ev.id}`,
-                { params: { status: "APPROVED" } }
-              );
-              return [ev.id, res.data ?? 0];
+              // fetch APPROVED and COMPLETED counts and sum them
+              const [resA, resC] = await Promise.all([
+                axios.get(`/registrations/count/${ev.id}`, { params: { status: "APPROVED" } }),
+                axios.get(`/registrations/count/${ev.id}`, { params: { status: "COMPLETED" } })
+              ]);
+              const a = Number(resA.data ?? 0);
+              const c = Number(resC.data ?? 0);
+              return [ev.id, a + c];
             } catch {
               return [ev.id, 0];
             }
@@ -244,7 +272,7 @@ export default function AdminDashboard() {
                   to={`/events/${p.eventId}?post=${p.id}`}
                   className="relative block px-4 py-3 hover:bg-purple-50 transition"
                 >
-                  <div className="text-sm text-gray-800 line-clamp-2 pr-16">
+                  <div className="text-sm text-gray-800 line-clamp-2">
                     {p.content || "(Không có nội dung)"}
                   </div>
 
@@ -252,9 +280,9 @@ export default function AdminDashboard() {
                     {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : ""}
                   </div>
 
-                  {eventNameMap[p.eventId] && (
-                    <div className="absolute bottom-2 right-3 text-[11px] text-gray-500 italic">
-                      {eventNameMap[p.eventId]}
+                  {(p.eventTitle || eventNameMap[p.eventId]) && (
+                    <div className="text-[11px] text-gray-500 italic mt-1">
+                      {p.eventTitle || eventNameMap[p.eventId]}
                     </div>
                   )}
                 </Link>

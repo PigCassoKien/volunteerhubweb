@@ -1,5 +1,6 @@
 import { useState } from "react";
 import axios from "../../api/axios";
+import { FiEye, FiEyeOff } from "react-icons/fi";
 
 export default function ForgotPassword() {
   const [step, setStep] = useState(1);
@@ -7,31 +8,35 @@ export default function ForgotPassword() {
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [msg, setMsg] = useState("");
 
   const handleSendOtp = async () => {
-    if (!email) return alert("Vui lòng nhập email");
+    if (!email) return setMsg("Vui lòng nhập email");
 
     try {
       await axios.post("/otp/generate", { email, type: "RESET_PASSWORD" });
-      alert("Mã OTP đã được gửi!");
+      setMsg("Mã OTP đã được gửi!");
       setStep(2);
     } catch (err) {
-      alert(err.response?.data?.message || "Gửi OTP thất bại");
+      const m = err.response?.data?.message || err.response?.data?.error || "Gửi OTP thất bại";
+      setMsg(m);
     }
   };
 
   const handleResetPassword = async () => {
-    if (otp.length !== 6) return alert("OTP chưa hợp lệ");
+    if (otp.length !== 6) return setMsg("OTP chưa hợp lệ");
 
-    if (newPassword !== confirmPassword)
-      return alert("Mật khẩu không trùng khớp");
+    if (newPassword !== confirmPassword) return setMsg("Mật khẩu không trùng khớp");
 
     try {
       await axios.post("/users/reset-password", { email, code: otp, newPassword });
-      alert("Mật khẩu đã được đổi thành công!");
+      setMsg("Mật khẩu đã được đổi thành công!");
       window.location.href = "/login";
     } catch (err) {
-      alert(err.response?.data?.message || "Đặt lại mật khẩu thất bại");
+      const m = err.response?.data?.message || err.response?.data?.error || "Đặt lại mật khẩu thất bại";
+      setMsg(m);
     }
   };
 
@@ -57,6 +62,7 @@ export default function ForgotPassword() {
             >
               Gửi mã OTP
             </button>
+            {msg && <div className="text-sm text-red-600">{msg}</div>}
           </div>
         )}
 
@@ -72,20 +78,30 @@ export default function ForgotPassword() {
             />
 
             <label>Mật khẩu mới</label>
-            <input
-              type="password"
-              className="border p-2 rounded"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type={showNew ? "text" : "password"}
+                className="border p-2 rounded flex-1"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <button type="button" onClick={() => setShowNew(s => !s)} className="text-gray-500">
+                {showNew ? <FiEyeOff /> : <FiEye />}
+              </button>
+            </div>
 
             <label>Nhập lại mật khẩu</label>
-            <input
-              type="password"
-              className="border p-2 rounded"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type={showConfirm ? "text" : "password"}
+                className="border p-2 rounded flex-1"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+              <button type="button" onClick={() => setShowConfirm(s => !s)} className="text-gray-500">
+                {showConfirm ? <FiEyeOff /> : <FiEye />}
+              </button>
+            </div>
 
             <button
               onClick={handleResetPassword}
@@ -93,6 +109,7 @@ export default function ForgotPassword() {
             >
               Đặt lại mật khẩu
             </button>
+            {msg && <div className="text-sm text-red-600">{msg}</div>}
           </div>
         )}
       </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { FiEye, FiEyeOff } from "react-icons/fi";
 import axios from "../../api/axios";
 
 export default function TabSettings({ user }) {
@@ -9,6 +10,9 @@ export default function TabSettings({ user }) {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -27,7 +31,7 @@ export default function TabSettings({ user }) {
     }
     setLoading(true);
     try {
-      await axios.post("/users/change-password", {
+      await axios.put("/users/change-password", {
         oldPassword,
         newPassword,
       });
@@ -92,34 +96,49 @@ export default function TabSettings({ user }) {
             <label className="block text-sm text-gray-600">
               Mật khẩu hiện tại
             </label>
-            <input
-              type="password"
-              value={oldPassword}
-              onChange={(e) => setOldPassword(e.target.value)}
-              className="w-full mt-1 px-3 py-2 rounded-lg border"
-            />
+            <div className="flex items-center">
+              <input
+                type={showOld ? "text" : "password"}
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                className="w-full mt-1 px-3 py-2 rounded-lg border"
+              />
+              <button type="button" onClick={() => setShowOld(s => !s)} className="ml-2 text-gray-500">
+                {showOld ? <FiEyeOff /> : <FiEye />}
+              </button>
+            </div>
           </div>
 
           <div>
             <label className="block text-sm text-gray-600">Mật khẩu mới</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full mt-1 px-3 py-2 rounded-lg border"
-            />
+            <div className="flex items-center">
+              <input
+                type={showNew ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full mt-1 px-3 py-2 rounded-lg border"
+              />
+              <button type="button" onClick={() => setShowNew(s => !s)} className="ml-2 text-gray-500">
+                {showNew ? <FiEyeOff /> : <FiEye />}
+              </button>
+            </div>
           </div>
 
           <div>
             <label className="block text-sm text-gray-600">
               Xác nhận mật khẩu
             </label>
-            <input
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              className="w-full mt-1 px-3 py-2 rounded-lg border"
-            />
+            <div className="flex items-center">
+              <input
+                type={showConfirm ? "text" : "password"}
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                className="w-full mt-1 px-3 py-2 rounded-lg border"
+              />
+              <button type="button" onClick={() => setShowConfirm(s => !s)} className="ml-2 text-gray-500">
+                {showConfirm ? <FiEyeOff /> : <FiEye />}
+              </button>
+            </div>
           </div>
 
           <div className="flex items-end">

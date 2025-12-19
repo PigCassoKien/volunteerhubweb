@@ -17,4 +17,7 @@ public class CommentDTO {
 
     // client helper: whether current requester can delete this comment
     private Boolean canDelete;
+
+    // Filename of user's avatar (stored on server). Frontend expects `c.userAvatar` or `c.userAvatarFile`.
+    private String userAvatarFile;
 }

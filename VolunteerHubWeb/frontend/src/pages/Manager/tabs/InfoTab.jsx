@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import axios from "../../../api/axios";
 
 export default function InfoTab({ event, registrations }) {
   const recipientsCount = registrations.filter((r) => r.status === "APPROVED").length;
@@ -21,7 +22,7 @@ export default function InfoTab({ event, registrations }) {
     setNotifyLoading(true);
     setNotifyResult(null);
     try {
-      await axios.post("/notifications/custom", { eventId: id, content: notifyContent.trim() });
+      await axios.post("/notifications/custom", { eventId: event.id, content: notifyContent.trim() });
       setNotifyResult({ ok: true, msg: `Đã gửi tới ${recipientsCount} người` });
       // auto close shortly
       setTimeout(() => {

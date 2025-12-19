@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,9 +36,10 @@ public class DashboardController {
     }, parameters = {
             @Parameter(name = "Authorization", in = ParameterIn.HEADER, schema = @Schema(type = "string"), example = "Bearer <token>", required = true)
     })
-    public ResponseEntity<DashboardDTO> getDashboardStats() {
-        return ResponseEntity.ok(dashboardService.getDashboardStats());
-    }
+        public ResponseEntity<DashboardDTO> getDashboardStats(Authentication authentication) {
+                String email = authentication == null ? null : authentication.getName();
+                return ResponseEntity.ok(dashboardService.getDashboardStats(email));
+        }
 
     @GetMapping("/stats/range")
     @Operation(summary = "Get dashboard statistics by date range", responses = {
@@ -48,10 +50,12 @@ public class DashboardController {
     }, parameters = {
             @Parameter(name = "Authorization", in = ParameterIn.HEADER, schema = @Schema(type = "string"), example = "Bearer <token>", required = true)
     })
-    public ResponseEntity<DashboardDTO> getDashboardStatsByDateRange(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
-        return ResponseEntity.ok(dashboardService.getDashboardStatsByDateRange(start, end));
-    }
+        public ResponseEntity<DashboardDTO> getDashboardStatsByDateRange(
+                        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+                        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+                        Authentication authentication) {
+                String email = authentication == null ? null : authentication.getName();
+                return ResponseEntity.ok(dashboardService.getDashboardStatsByDateRange(start, end, email));
+        }
 
 }

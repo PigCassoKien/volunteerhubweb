@@ -91,7 +91,9 @@ export default function EventChannel({ eventId }) {
     if (initial) setLoading(true);
     try {
       const { data } = await axios.get(`/posts/event/${eventId}`);
-      const arr = Array.isArray(data) ? data : [];
+      let arr = Array.isArray(data) ? data : [];
+      // Ensure only APPROVED posts (and explicit announcements) are shown in the public channel.
+      arr = arr.filter((p) => String(p.status) === "APPROVED" || Boolean(p.announcement));
       arr.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
       // merge to preserve already loaded comment trees and open panels
@@ -174,10 +176,19 @@ export default function EventChannel({ eventId }) {
     composerFiles.forEach((f) => form.append("mediaFiles", f));
     try {
       const res = await axios.post("/posts/create", form, { headers: { "Content-Type": "multipart/form-data" } });
-      if (res.data) setPosts((p) => [res.data, ...p]);
+      // Only show the new post in the public channel if it's already APPROVED.
+      // Volunteer-created posts are PENDING and must be approved by manager before appearing.
+      if (res.data) {
+        if (String(res.data.status) === "APPROVED") {
+          setPosts((p) => [res.data, ...p]);
+          if (res.data?.id) await fetchReactionsForPost(res.data.id);
+        } else {
+          // keep user's composer cleared and inform about pending moderation
+          alert("Bài viết của bạn đã được gửi và đang chờ duyệt bởi quản lý. Nó sẽ hiển thị trên kênh sau khi được duyệt.");
+        }
+      }
       setComposerText("");
       setComposerFiles([]);
-      if (res.data?.id) await fetchReactionsForPost(res.data.id);
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.message || "Tạo bài viết thất bại");

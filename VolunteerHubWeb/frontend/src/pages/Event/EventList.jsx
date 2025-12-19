@@ -2,6 +2,7 @@ import { FiSearch, FiBookmark, FiCalendar, FiX, FiFilter } from "react-icons/fi"
 import React, { useEffect, useState } from "react";
 import axios from "../../api/axios";
 import EventCard from "../../components/EventCard";
+import Pagination from "../../components/Pagination";
 import StatsSection from "../../components/StatsSection";
 import CreateEvent from "../../components/CreateEvent";
 
@@ -14,6 +15,9 @@ export default function EventList() {
   const [favoriteIds, setFavoriteIds] = useState(new Set());
   const [search, setSearch] = useState("");
   const [searchTermForFilter, setSearchTermForFilter] = useState("");
+  const [timeFilter, setTimeFilter] = useState("ALL"); // ALL | UPCOMING | ONGOING | ENDED
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 6;
 
   useEffect(() => {
     if (search.trim() === "") {
@@ -159,13 +163,10 @@ export default function EventList() {
   };
 
   // Filter events
-  const displayedEvents = (
-    category === "Tất cả"
-      ? events
-      : events.filter((e) => e.category?.name === category)
-  ).filter((e) => {
-    if (!searchTermForFilter) return true;
+  const now = new Date();
 
+  const matchesSearch = (e) => {
+    if (!searchTermForFilter) return true;
     const s = searchTermForFilter;
     return (
       (e.title || "").toLowerCase().includes(s) ||
@@ -173,9 +174,28 @@ export default function EventList() {
       (e.category?.name || "").toLowerCase().includes(s) ||
       (e.createdByFullName || "").toLowerCase().includes(s)
     );
-  });
+  };
+
+  const matchesTimeFilter = (e) => {
+    if (timeFilter === "ALL") return true;
+    const start = new Date(e.startDate);
+    const end = new Date(e.endDate);
+    if (timeFilter === "UPCOMING") return start > now;
+    if (timeFilter === "ONGOING") return start <= now && end >= now;
+    if (timeFilter === "ENDED") return end < now;
+    return true;
+  };
+
+  const displayedEvents = (
+    category === "Tất cả"
+      ? events
+      : events.filter((e) => e.category?.name === category)
+  ).filter((e) => matchesSearch(e) && matchesTimeFilter(e));
 
   const filteredEvents = displayedEvents;
+
+  const totalPages = Math.max(1, Math.ceil(filteredEvents.length / PAGE_SIZE));
+  const pageEvents = filteredEvents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -301,28 +321,32 @@ export default function EventList() {
               <option value="participants">Số người tham gia</option>
             </select>
           </div>
+          {/* Time filters */}
+          <div className="ml-4 flex items-center gap-2">
+            <button onClick={() => { setTimeFilter("ALL"); setPage(1); }} className={`px-3 py-1 rounded-full text-sm ${timeFilter==='ALL' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Tất cả</button>
+            <button onClick={() => { setTimeFilter("UPCOMING"); setPage(1); }} className={`px-3 py-1 rounded-full text-sm ${timeFilter==='UPCOMING' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Chưa bắt đầu</button>
+            <button onClick={() => { setTimeFilter("ONGOING"); setPage(1); }} className={`px-3 py-1 rounded-full text-sm ${timeFilter==='ONGOING' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Đang diễn ra</button>
+            <button onClick={() => { setTimeFilter("ENDED"); setPage(1); }} className={`px-3 py-1 rounded-full text-sm ${timeFilter==='ENDED' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Đã kết thúc</button>
+          </div>
         </div>
       </div>
 
       {/* ---------- Event Cards ---------- */}
-      <div className="max-w-6xl mx-auto mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10 pb-20">
-        {!loading &&
-          filteredEvents.map((event) => (
-            <EventCard
-              key={event.id}
-              event={event}
-              status={myStatusByEvent[event.id]}
-              isFavorited={favoriteIds.has(String(event.id))}
-              onToggleFavorite={toggleFavorite}
-            />
-          ))}
+      <div className="max-w-6xl mx-auto mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10 pb-6">
+        {!loading && pageEvents.map((event) => (
+          <EventCard
+            key={event.id}
+            event={event}
+            status={myStatusByEvent[event.id]}
+            isFavorited={favoriteIds.has(String(event.id))}
+            onToggleFavorite={toggleFavorite}
+          />
+        ))}
       </div>
 
-      {/* Load More */}
-      <div className="text-center pb-16">
-        <button className="px-6 py-3 border border-emerald-600 text-emerald-700 font-medium rounded-full hover:bg-emerald-600 hover:text-white transition-all shadow-sm">
-          + Xem thêm sự kiện
-        </button>
+      {/* Pagination */}
+      <div className="max-w-6xl mx-auto text-center pb-16">
+        <Pagination page={page} totalPages={totalPages} onChange={(p) => setPage(p)} />
       </div>
 
       <StatsSection />

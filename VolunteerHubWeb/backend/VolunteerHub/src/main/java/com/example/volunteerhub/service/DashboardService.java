@@ -5,6 +5,7 @@ import com.example.volunteerhub.dto.EventDTO;
 import com.example.volunteerhub.dto.PostDTO;
 import com.example.volunteerhub.entity.Event;
 import com.example.volunteerhub.entity.Post;
+import com.example.volunteerhub.entity.enums.PostStatus;
 import com.example.volunteerhub.entity.User;
 import com.example.volunteerhub.entity.enums.EventStatus;
 import com.example.volunteerhub.entity.enums.UserRole;
@@ -49,16 +50,25 @@ public class DashboardService {
 
     // Public dashboard (anyone can view)
     public DashboardDTO getDashboardStats() {
-        return buildDashboard(LocalDateTime.now().minusDays(7), null, null);
+        return buildDashboard(LocalDateTime.now().minusDays(7), null, null, null);
     }
 
     // Public dashboard by date range
     public DashboardDTO getDashboardStatsByDateRange(LocalDateTime start, LocalDateTime end) {
-        return buildDashboard(null, start, end);
+        return buildDashboard(null, start, end, null);
+    }
+
+    // Authenticated-aware dashboard: pass requester's email (may be null)
+    public DashboardDTO getDashboardStats(String requesterEmail) {
+        return buildDashboard(LocalDateTime.now().minusDays(7), null, null, requesterEmail);
+    }
+
+    public DashboardDTO getDashboardStatsByDateRange(LocalDateTime start, LocalDateTime end, String requesterEmail) {
+        return buildDashboard(null, start, end, requesterEmail);
     }
 
     // Internal builder: if last7Days != null use it for "new" filter, otherwise use start/end when provided
-    private DashboardDTO buildDashboard(LocalDateTime last7Days, LocalDateTime start, LocalDateTime end) {
+    private DashboardDTO buildDashboard(LocalDateTime last7Days, LocalDateTime start, LocalDateTime end, String requesterEmail) {
         DashboardDTO dashboard = new DashboardDTO();
 
         // New events: either last7Days or between start/end
@@ -92,7 +102,8 @@ public class DashboardService {
             // recent posts interactions (reactions + comments)
             int recentInteractions = 0;
             try {
-                List<Post> posts = postRepository.findByEventId(ev.getId());
+                // Only consider APPROVED posts for trending interactions
+                List<Post> posts = postRepository.findByEventIdAndStatus(ev.getId(), PostStatus.APPROVED);
                 for (Post p : posts) {
                     if (p.getCreatedAt() != null && p.getCreatedAt().isAfter(recentCut)) {
                         int reactions = reactionRepository.countByPostId(p.getId());
@@ -105,6 +116,9 @@ public class DashboardService {
             // weighted score: registrations heavier than interactions
             int score = recentRegs * 3 + recentInteractions;
             EventDTO dto = modelMapper.map(ev, EventDTO.class);
+            try {
+                dto.setRegisteredCount(registrationRepository.countByEventId(ev.getId()));
+            } catch (Exception ignored) { }
             // temporarily store score in description field if needed by client (or add new DTO field later)
             // but better to reuse DTO.title/description not ideal — keep score outside; for now set description to include score
             dto.setDescription((dto.getDescription() == null ? "" : dto.getDescription()) + "\n__score:" + score);
@@ -123,10 +137,38 @@ public class DashboardService {
         } else {
             newPosts = postRepository.findByCreatedAtBetween(start, end);
         }
+        // only expose APPROVED posts in public dashboard
+        // Determine if requester is a volunteer and which event ids they are approved for
+        final java.util.Set<Long> allowedEventIds;
+        if (requesterEmail != null) {
+            java.util.Set<Long> ids = null;
+            try {
+                User requester = userRepository.findByEmail(requesterEmail).orElse(null);
+                if (requester != null && requester.getRole() == UserRole.VOLUNTEER) {
+                    ids = registrationRepository.findByUserId(requester.getId()).stream()
+                            .filter(r -> r.getStatus() == com.example.volunteerhub.entity.enums.RegistrationStatus.APPROVED)
+                            .map(r -> r.getEvent().getId())
+                            .collect(Collectors.toSet());
+                }
+            } catch (Exception ignored) { }
+            allowedEventIds = ids;
+        } else {
+            allowedEventIds = null;
+        }
+
         dashboard.setNewPosts(newPosts.stream()
+                .filter(p -> p.getStatus() == PostStatus.APPROVED)
+                .filter(p -> {
+                    if (allowedEventIds == null) return true; // not a volunteer or not authenticated -> show all approved
+                    return allowedEventIds.contains(p.getEvent().getId());
+                })
                 .sorted(Comparator.comparing(p -> p.getCreatedAt() == null ? LocalDateTime.MIN : p.getCreatedAt(), Comparator.reverseOrder()))
                 .limit(10)
-                .map(post -> modelMapper.map(post, PostDTO.class))
+                .map(post -> {
+                    PostDTO dto = modelMapper.map(post, PostDTO.class);
+                    dto.setEventTitle(post.getEvent() != null ? post.getEvent().getTitle() : null);
+                    return dto;
+                })
                 .collect(Collectors.toList()));
 
         // Metrics

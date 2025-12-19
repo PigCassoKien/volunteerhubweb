@@ -17,6 +17,12 @@ public class PostDTO {
     private PostStatus status;
     private LocalDateTime createdAt;
 
+    // Title of the event this post belongs to (for dashboard / listing)
+    private String eventTitle;
+
+    // Filename of user's avatar (stored on server). Frontend expects `userAvatar` or `userAvatarFile`.
+    private String userAvatarFile;
+
     // Bài viết có phải thông báo (announcement) không
     private Boolean announcement;
 

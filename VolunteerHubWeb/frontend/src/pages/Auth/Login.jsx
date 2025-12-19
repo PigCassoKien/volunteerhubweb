@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FiMail, FiLock } from "react-icons/fi";
+import { FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import { FaFacebook } from "react-icons/fa";
 import axios from "../../api/axios";
@@ -9,6 +9,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState("");
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -41,7 +42,8 @@ export default function Login() {
       }
     } catch (err) {
       console.error("Login failed", err);
-      alert(err.response?.data?.message || "Đăng nhập thất bại");
+      const m = err.response?.data?.message || err.response?.data?.error || "Đăng nhập thất bại";
+      setMsg(m);
     } finally {
       setLoading(false);
     }
@@ -84,6 +86,8 @@ export default function Login() {
           {loading ? "Đang đăng nhập..." : "Đăng nhập"}
         </button>
 
+        {msg && <div className="text-center text-sm mt-2 text-red-600">{msg}</div>}
+
         <p className="text-sm text-center mt-1">
           <Link to="/forgot-password" className="text-green-600 hover:underline">
             Quên mật khẩu?
@@ -123,12 +127,21 @@ export default function Login() {
 }
 
 function InputField({ icon, label, className = "", ...props }) {
+  const [show, setShow] = useState(false);
+  const isPassword = props.type === "password";
+  const actualType = isPassword ? (show ? "text" : "password") : props.type;
+
   return (
     <div className={`flex-1 ${className}`}>
       <label className="block text-gray-600 text-sm mb-1">{label}</label>
       <div className="flex items-center border rounded-lg px-3 py-2">
         {icon}
-        <input {...props} className="w-full outline-none ml-2" />
+        <input {...props} type={actualType} className="w-full outline-none ml-2" />
+        {isPassword && (
+          <button type="button" onClick={() => setShow(s => !s)} className="ml-2 text-gray-500">
+            {show ? <FiEyeOff /> : <FiEye />}
+          </button>
+        )}
       </div>
     </div>
   );
