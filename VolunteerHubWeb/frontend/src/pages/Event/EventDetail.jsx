@@ -316,6 +316,28 @@ export default function EventDetail() {
               </div>
             </div>
 
+            {/* Right: Stats */}
+            <div className="space-y-3">
+              <StatItem
+                label="Địa điểm"
+                value={event.location}
+                icon={<i className="fa-solid fa-location-dot" />}
+              />
+              <StatItem
+                label="Thời gian"
+                value={`${new Date(event.startDate).toLocaleString("vi-VN")} - ${new Date(event.endDate).toLocaleString("vi-VN")}`}
+                icon={<i className="fa-regular fa-clock" />}
+              />
+              <StatItem
+                label="Sức chứa"
+                value={`${capacity} người`}
+                icon={<i className="fa-solid fa-users" />}
+              />
+              <StatItem
+                label="Người tạo"
+                value={event.createdByFullName || "Quản lý sự kiện"}
+                icon={<i className="fa-regular fa-user" />}
+              />
             <div className="md:col-span-1 flex items-center justify-end">
               <div className="bg-white/90 rounded-2xl p-3 text-gray-800 shadow-md w-full md:w-auto">
                 <div className="flex items-center justify-between gap-4">
