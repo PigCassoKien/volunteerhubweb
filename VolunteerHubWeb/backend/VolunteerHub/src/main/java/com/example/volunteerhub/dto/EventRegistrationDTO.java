@@ -34,4 +34,7 @@ public class EventRegistrationDTO {
     private String experience;
     private String skills;
     private Boolean confirmation;
+    private String cancellationReason;
+    private LocalDateTime canceledAt;
+    private String canceledByName;
 }

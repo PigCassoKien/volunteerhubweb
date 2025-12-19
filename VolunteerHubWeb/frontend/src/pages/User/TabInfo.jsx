@@ -2,7 +2,7 @@ import { FiEdit3 } from "react-icons/fi";
 import axios from "../../api/axios";
 import { useState } from "react";
 
-export default function TabInfo({ user, setUser, saving, setSaving }) {
+export default function TabInfo({ user, setUser, saving, setSaving, isOwner = true }) {
   const [editing, setEditing] = useState(false);
 
   const token = localStorage.getItem("token");
@@ -48,7 +48,7 @@ export default function TabInfo({ user, setUser, saving, setSaving }) {
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-xl font-bold">Thông tin cá nhân</h3>
 
-        {editing ? (
+        {isOwner && (editing ? (
           <button
             onClick={handleSave}
             className="bg-[#06C270] text-white px-4 py-2 rounded-lg flex items-center gap-2"
@@ -63,7 +63,7 @@ export default function TabInfo({ user, setUser, saving, setSaving }) {
           >
             <FiEdit3 /> Chỉnh sửa
           </button>
-        )}
+        ))}
       </div>
 
       {/* GRID FORM */}

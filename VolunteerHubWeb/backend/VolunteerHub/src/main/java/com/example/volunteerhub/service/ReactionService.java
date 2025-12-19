@@ -131,7 +131,8 @@ public class ReactionService {
                 r.setReactionType(reactionDTO.getReactionType());
                 r.setCreatedAt(LocalDateTime.now());
                 r = reactionRepository.save(r);
-                notificationService.notifyReaction(comment.getUser().getId(), comment.getId(), RelatedType.COMMENT, r.getReactionType());
+                // include actor user id so NotificationService can display actor's name
+                notificationService.notifyReaction(comment.getUser().getId(), comment.getId(), RelatedType.COMMENT, r.getReactionType(), user.getId());
                 return modelMapper.map(r, ReactionDTO.class);
             }
         }

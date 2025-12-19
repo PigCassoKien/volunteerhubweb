@@ -11,6 +11,8 @@ import com.example.volunteerhub.entity.enums.UserRole;
 import com.example.volunteerhub.repository.EventRepository;
 import com.example.volunteerhub.repository.PostRepository;
 import com.example.volunteerhub.repository.UserRepository;
+import com.example.volunteerhub.repository.ReactionRepository;
+import com.example.volunteerhub.repository.CommentRepository;
 import com.example.volunteerhub.repository.EventRegistrationRepository;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +37,12 @@ public class DashboardService {
 
     @Autowired
     private EventRegistrationRepository registrationRepository;
+
+    @Autowired
+    private ReactionRepository reactionRepository;
+
+    @Autowired
+    private CommentRepository commentRepository;
 
     @Autowired
     private ModelMapper modelMapper;
@@ -67,13 +75,46 @@ public class DashboardService {
                 .map(event -> modelMapper.map(event, EventDTO.class))
                 .collect(Collectors.toList()));
 
-        // Trending events: APPROVED, sort by createdAt desc and limit (placeholder for actual popularity metric)
-        List<Event> trendingEvents = eventRepository.findByStatus(EventStatus.APPROVED);
-        dashboard.setTrendingEvents(trendingEvents.stream()
-                .sorted(Comparator.comparing(e -> e.getCreatedAt() == null ? LocalDateTime.MIN : e.getCreatedAt(), Comparator.reverseOrder()))
+        // Trending events: compute simple popularity score based on recent registrations and post interactions
+        List<Event> approved = eventRepository.findByStatus(EventStatus.APPROVED);
+        LocalDateTime recentCut = last7Days != null ? last7Days : (start != null ? start : LocalDateTime.now().minusDays(7));
+
+        List<EventDTO> trending = approved.stream().map(ev -> {
+            // registrations in recent window with APPROVED status
+            int recentRegs = 0;
+            try {
+                recentRegs = (int) registrationRepository.findByEventIdAndStatus(ev.getId(), com.example.volunteerhub.entity.enums.RegistrationStatus.APPROVED)
+                        .stream()
+                        .filter(r -> r.getRegisteredAt() != null && r.getRegisteredAt().isAfter(recentCut))
+                        .count();
+            } catch (Exception ignored) { }
+
+            // recent posts interactions (reactions + comments)
+            int recentInteractions = 0;
+            try {
+                List<Post> posts = postRepository.findByEventId(ev.getId());
+                for (Post p : posts) {
+                    if (p.getCreatedAt() != null && p.getCreatedAt().isAfter(recentCut)) {
+                        int reactions = reactionRepository.countByPostId(p.getId());
+                        int comments = commentRepository.findByPostId(p.getId()).size();
+                        recentInteractions += reactions + comments;
+                    }
+                }
+            } catch (Exception ignored) { }
+
+            // weighted score: registrations heavier than interactions
+            int score = recentRegs * 3 + recentInteractions;
+            EventDTO dto = modelMapper.map(ev, EventDTO.class);
+            // temporarily store score in description field if needed by client (or add new DTO field later)
+            // but better to reuse DTO.title/description not ideal — keep score outside; for now set description to include score
+            dto.setDescription((dto.getDescription() == null ? "" : dto.getDescription()) + "\n__score:" + score);
+            return new java.util.AbstractMap.SimpleEntry<>(ev, new java.util.AbstractMap.SimpleEntry<>(score, dto));
+        }).sorted((a, b) -> Integer.compare(b.getValue().getKey(), a.getValue().getKey()))
                 .limit(10)
-                .map(event -> modelMapper.map(event, EventDTO.class))
-                .collect(Collectors.toList()));
+                .map(e -> e.getValue().getValue())
+                .collect(Collectors.toList());
+
+        dashboard.setTrendingEvents(trending);
 
         // New posts: either last7Days or between start/end
         List<Post> newPosts;

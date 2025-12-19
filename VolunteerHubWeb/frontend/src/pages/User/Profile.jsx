@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import api from "../../api/axios";
+import { getFileUrl } from "../../utils/files";
 import {
   FiUser,
   FiMail,
@@ -25,17 +27,24 @@ export default function Profile() {
 
   const token = localStorage.getItem("token");
   const storedUser = JSON.parse(localStorage.getItem("user"));
+  const params = useParams();
+  const viewingId = params?.id ? Number(params.id) : null;
+  const isOwner = !viewingId || (storedUser && viewingId === storedUser.id);
 
   useEffect(() => {
-    if (!token || !storedUser) return;
+    const targetId = viewingId || (storedUser ? storedUser.id : null);
+    if (!targetId) {
+      setLoading(false);
+      return;
+    }
 
-    api.get(`/users/get/${storedUser.id}`)
+    api.get(`/users/get/${targetId}`)
       .then((res) => {
         setUser(res.data);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [viewingId]);
 
   // UPLOAD AVATAR
   const handleAvatarUpload = async (e) => {
@@ -70,7 +79,7 @@ export default function Profile() {
     );
 
   const avatarUrl = user.avatarFile
-    ? `/uploads/${user.avatarFile}`
+    ? getFileUrl(user.avatarFile)
     : "https://i.pravatar.cc/200";
 
   return (
@@ -103,20 +112,24 @@ export default function Profile() {
                 className="w-32 h-32 object-cover rounded-full"
               />
 
-              <button
-                onClick={() => fileInputRef.current.click()}
-                className="absolute bottom-0 right-0 bg-white p-2 rounded-full shadow"
-              >
-                <FiCamera className="text-gray-600" />
-              </button>
+              {isOwner && (
+                <>
+                  <button
+                    onClick={() => fileInputRef.current.click()}
+                    className="absolute bottom-0 right-0 bg-white p-2 rounded-full shadow"
+                  >
+                    <FiCamera className="text-gray-600" />
+                  </button>
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-              />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                  />
+                </>
+              )}
             </div>
 
             <h2 className="text-xl font-bold mt-4">{user.fullName}</h2>
@@ -160,7 +173,6 @@ export default function Profile() {
               { key: "info", label: "Thông tin" },
               { key: "activity", label: "Hoạt động" },
               { key: "achievement", label: "Thành tích" },
-              { key: "settings", label: "Cài đặt" },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -175,18 +187,33 @@ export default function Profile() {
                 {tab.label}
               </button>
             ))}
+
+            {/* Settings tab only for owner */}
+            {isOwner && (
+              <button
+                onClick={() => setActiveTab("settings")}
+                className={`flex-1 px-6 py-2 rounded-lg font-semibold text-center transition
+                  ${activeTab === "settings"
+                    ? "bg-[#06C270] text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                  }
+                `}
+              >
+                Cài đặt
+              </button>
+            )}
           </div>
 
           {/* CONTENT */}
           <div className="bg-white rounded-2xl shadow p-8 h-full">
             {activeTab === "info" && (
-              <TabInfo user={user} setUser={setUser} saving={saving} setSaving={setSaving} />
+              <TabInfo user={user} setUser={setUser} saving={saving} setSaving={setSaving} isOwner={isOwner} />
             )}
             {activeTab === "activity" && <TabActivity user={user} />}
             {activeTab === "achievement" && (
               <div className="text-center text-gray-500">Tính năng đang phát triển.</div>
             )}
-            {activeTab === "settings" && <TabSettings user={user} />}
+            {activeTab === "settings" && isOwner && <TabSettings user={user} />}
           </div>
 
         </div>
