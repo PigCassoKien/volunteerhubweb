@@ -37,10 +37,8 @@ const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () =
   const capacity = maxParticipants ?? 50;
   const progress = capacity > 0 ? Math.min(100, (approvedCount / capacity) * 100) : 0;
 
-  const date = startDate ? new Date(startDate).toLocaleDateString("vi-VN") : "";
-  const time = startDate && endDate
-    ? `${new Date(startDate).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} - ${new Date(endDate).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`
-    : "";
+  const startDateTime = startDate ? new Date(startDate).toLocaleString("vi-VN") : "";
+  const endDateTime = endDate ? new Date(endDate).toLocaleString("vi-VN") : "";
 
   // derive status string and registration id (if any)
   const statusStr = typeof status === "string" ? status : status?.status || localStatus;
@@ -193,7 +191,7 @@ const EventCard = ({ event, status, isFavorited = false, onToggleFavorite = () =
         </p>
 
         <div className="flex items-center text-gray-500 text-sm mt-3 gap-2">
-          <span>{date} · {time}</span>
+          <span>{startDateTime} — {endDateTime}</span>
         </div>
         <div className="flex items-center text-gray-500 text-sm mt-1 gap-2">
           <span>{location}</span>

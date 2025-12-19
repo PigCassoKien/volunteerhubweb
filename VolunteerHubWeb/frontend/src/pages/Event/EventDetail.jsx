@@ -343,8 +343,8 @@ export default function EventDetail() {
                 icon={<i className="fa-solid fa-location-dot" />}
               />
               <StatItem
-                label="Thời gian bắt đầu"
-                value={new Date(event.startDate).toLocaleString("vi-VN")}
+                label="Thời gian"
+                value={`${new Date(event.startDate).toLocaleString("vi-VN")} - ${new Date(event.endDate).toLocaleString("vi-VN")}`}
                 icon={<i className="fa-regular fa-clock" />}
               />
               <StatItem
