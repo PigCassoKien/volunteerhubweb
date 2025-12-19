@@ -1,25 +1,17 @@
 import React from "react";
 
 export default function Pagination({ page = 1, totalPages = 1, onChange = () => {} }) {
-  const prev = () => onChange(Math.max(1, page - 1));
-  const next = () => onChange(Math.min(totalPages, page + 1));
-  if (totalPages <= 1) return null;
-  return (
-    <div className="flex items-center justify-center gap-2">
-      <button onClick={prev} disabled={page <= 1} className="px-3 py-1 border rounded disabled:opacity-50">Prev</button>
-      <div className="text-sm text-gray-600">Trang {page} / {totalPages}</div>
-      <button onClick={next} disabled={page >= totalPages} className="px-3 py-1 border rounded disabled:opacity-50">Next</button>
-    </div>
-  );
-}
-export default function Pagination({ page, totalPages, onChange }) {
-  const safeTotal = Math.max(totalPages, 1);
+  const safeTotal = Math.max(Number(totalPages) || 1, 1);
+  const current = Math.min(Math.max(Number(page) || 1, 1), safeTotal);
+  if (safeTotal <= 1) return null;
+
+  const go = (p) => onChange(Math.min(Math.max(p, 1), safeTotal));
 
   return (
     <div className="flex justify-center gap-2 py-3">
       <button
-        onClick={() => onChange(page - 1)}
-        disabled={page === 1}
+        onClick={() => go(current - 1)}
+        disabled={current === 1}
         className="px-3 py-1 border rounded disabled:opacity-40"
       >
         ‹
@@ -30,10 +22,8 @@ export default function Pagination({ page, totalPages, onChange }) {
         return (
           <button
             key={p}
-            onClick={() => onChange(p)}
-            disabled={safeTotal === 1}
-            className={`px-3 py-1 border rounded ${p === page ? "bg-emerald-600 text-white" : ""
-              }`}
+            onClick={() => go(p)}
+            className={`px-3 py-1 border rounded ${p === current ? "bg-emerald-600 text-white" : ""}`}
           >
             {p}
           </button>
@@ -41,8 +31,8 @@ export default function Pagination({ page, totalPages, onChange }) {
       })}
 
       <button
-        onClick={() => onChange(page + 1)}
-        disabled={page === safeTotal}
+        onClick={() => go(current + 1)}
+        disabled={current === safeTotal}
         className="px-3 py-1 border rounded disabled:opacity-40"
       >
         ›
