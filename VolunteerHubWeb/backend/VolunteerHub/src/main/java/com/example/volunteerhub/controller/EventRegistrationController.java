@@ -20,6 +20,7 @@ import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import org.springframework.security.core.userdetails.UserDetails;
 
 @RestController
@@ -145,6 +146,14 @@ public class EventRegistrationController {
         registrationService.deleteRegistration(id, email);
         return ResponseEntity.ok().build();
     }
+
+        @PutMapping("/generate/{id}")
+        @PreAuthorize("isAuthenticated()")
+        public ResponseEntity<Map<String, String>> generateCertificate(@PathVariable Long id, Authentication authentication) {
+                String email = authentication.getName();
+                String url = registrationService.generateCertificateForRegistration(id, email);
+                return ResponseEntity.ok(Map.of("url", url));
+        }
 
     @GetMapping("/count/{eventId}")
     @Operation(summary = "Count registrations by event and status", responses = {

@@ -15,6 +15,15 @@ import com.example.volunteerhub.repository.UserRepository;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.kernel.font.PdfFont;
+import com.itextpdf.kernel.font.PdfFontFactory;
+import com.itextpdf.io.font.PdfEncodings;
+import com.itextpdf.io.font.constants.StandardFonts;
+import com.itextpdf.layout.properties.TextAlignment;
+import com.itextpdf.kernel.geom.PageSize;
+import com.itextpdf.layout.element.Div;
+import com.itextpdf.layout.borders.SolidBorder;
+import com.itextpdf.kernel.colors.DeviceRgb;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -161,7 +170,13 @@ public class EventRegistrationService {
             dto.setStatus(r.getStatus());
             dto.setRegisteredAt(r.getRegisteredAt());
             dto.setCompletedAt(r.getCompletedAt());
-            dto.setCertificateUrl(null); // set if you have it
+            String certPath = "./Uploads/certificates/" + r.getId() + "_certificate.pdf";
+            File certFile = new File(certPath);
+            if (certFile.exists()) {
+                dto.setCertificateUrl("/uploads/certificates/" + r.getId() + "_certificate.pdf");
+            } else {
+                dto.setCertificateUrl(null);
+            }
 
             // full volunteer form fields
             dto.setFullName(r.getFullName());
@@ -222,7 +237,13 @@ public class EventRegistrationService {
             dto.setPhone(reg.getPhone());
             dto.setExperience(reg.getExperience());
             dto.setSkills(reg.getSkills());
-            dto.setCertificateUrl(null); // placeholder if you later add certificate field
+            String certPath = "./Uploads/certificates/" + reg.getId() + "_certificate.pdf";
+            File certFile = new File(certPath);
+            if (certFile.exists()) {
+                dto.setCertificateUrl("/uploads/certificates/" + reg.getId() + "_certificate.pdf");
+            } else {
+                dto.setCertificateUrl(null);
+            }
             dto.setCancellationReason(reg.getCancellationReason());
             dto.setCanceledAt(reg.getCanceledAt());
             dto.setCanceledByName(reg.getCanceledBy() != null ? reg.getCanceledBy().getFullName() : null);
@@ -255,7 +276,13 @@ public class EventRegistrationService {
             dto.setPhone(reg.getPhone());
             dto.setExperience(reg.getExperience());
             dto.setSkills(reg.getSkills());
-            dto.setCertificateUrl(null);
+            String certPath = "./Uploads/certificates/" + reg.getId() + "_certificate.pdf";
+            File certFile = new File(certPath);
+            if (certFile.exists()) {
+                dto.setCertificateUrl("/uploads/certificates/" + reg.getId() + "_certificate.pdf");
+            } else {
+                dto.setCertificateUrl(null);
+            }
             dto.setCancellationReason(reg.getCancellationReason());
             dto.setCanceledAt(reg.getCanceledAt());
             dto.setCanceledByName(reg.getCanceledBy() != null ? reg.getCanceledBy().getFullName() : null);
@@ -285,8 +312,50 @@ public class EventRegistrationService {
 
         // NEW: notify user
         notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.COMPLETED);
+        // generate certificate file (best-effort)
+        try {
+            String path = generateCertificate(reg);
+            // path is like ./Uploads/certificates/{id}_certificate.pdf
+        } catch (Exception ex) {
+            // ignore generation errors
+        }
 
-        return modelMapper.map(reg, EventRegistrationDTO.class);
+        EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
+        String possible = "/uploads/certificates/" + reg.getId() + "_certificate.pdf";
+        File f = new File("./Uploads/certificates/" + reg.getId() + "_certificate.pdf");
+        if (f.exists()) dto.setCertificateUrl(possible);
+        return dto;
+    }
+
+    // Public wrapper so controllers or other callers can request generation on-demand
+    public String generateCertificateForRegistration(Long registrationId, String requesterEmail) {
+        EventRegistration reg = registrationRepository.findById(registrationId).orElseThrow(() -> new RuntimeException("Registration not found"));
+
+        // Allow if requester is registrant, event manager (owner) or admin
+        boolean isOwner = reg.getUser() != null && reg.getUser().getEmail() != null && reg.getUser().getEmail().equals(requesterEmail);
+        boolean isManager = false;
+        boolean isAdmin = false;
+        if (requesterEmail != null) {
+            User requester = userRepository.findByEmail(requesterEmail).orElse(null);
+            if (requester != null) {
+                isManager = requester.getRole() == UserRole.EVENT_MANAGER && reg.getEvent() != null && reg.getEvent().getCreatedBy() != null && reg.getEvent().getCreatedBy().getId().equals(requester.getId());
+                isAdmin = requester.getRole() != null && requester.getRole().toString().contains("ADMIN");
+            }
+        }
+
+        if (!isOwner && !isManager && !isAdmin) {
+            throw new RuntimeException("Unauthorized to generate certificate");
+        }
+
+        try {
+            String path = generateCertificate(reg);
+            String publicUrl = "/uploads/certificates/" + reg.getId() + "_certificate.pdf";
+            File f = new File(path);
+            if (f.exists()) return publicUrl;
+            return null;
+        } catch (Exception ex) {
+            throw new RuntimeException("Failed to generate certificate", ex);
+        }
     }
 
     public EventRegistrationDTO cancelRegistration(Long registrationId, String email, String reason) {
@@ -375,14 +444,92 @@ public class EventRegistrationService {
             String dest = "./Uploads/certificates/" + registration.getId() + "_certificate.pdf";
             File file = new File(dest);
             file.getParentFile().mkdirs();
+
+            // try to find a TTF font that supports UTF-8 (Vietnamese)
+            String fontPath = null;
+            String[] candidates = new String[]{
+                    "src/main/resources/fonts/DejaVuSans.ttf",
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                    "C:\\Windows\\Fonts\\arial.ttf",
+                    "C:\\Windows\\Fonts\\times.ttf"
+            };
+            for (String p : candidates) {
+                if (p == null) continue;
+                File f = new File(p);
+                if (f.exists()) {
+                    fontPath = p;
+                    break;
+                }
+            }
+
             PdfWriter writer = new PdfWriter(dest);
             PdfDocument pdf = new PdfDocument(writer);
-            Document document = new Document(pdf);
-            document.add(new Paragraph("Certificate of Participation")
-                    .setFontSize(20).setBold());
-            document.add(new Paragraph("This certifies that " + registration.getUser().getFullName()));
-            document.add(new Paragraph("has successfully participated in " + registration.getEvent().getTitle()));
-            document.add(new Paragraph("Date: " + registration.getCompletedAt().toString()));
+            Document document = new Document(pdf, PageSize.A4);
+            document.setMargins(72, 72, 72, 72);
+
+            PdfFont font;
+            if (fontPath != null) {
+                font = PdfFontFactory.createFont(fontPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+            } else {
+                // fallback (may not support full UTF-8 glyphs)
+                font = PdfFontFactory.createFont(StandardFonts.HELVETICA);
+            }
+
+            document.setFont(font);
+
+            // Decorative container with light border
+            Div box = new Div();
+            box.setBorder(new SolidBorder(new DeviceRgb(200, 200, 200), 1));
+            box.setPadding(20);
+
+            // Title
+            Paragraph title = new Paragraph("GIẤY CHỨNG NHẬN")
+                    .setFontSize(28)
+                    .setBold()
+                    .setTextAlignment(TextAlignment.CENTER);
+            box.add(title);
+
+            box.add(new Paragraph(" ")); // spacer
+
+            // Recipient
+            String fullName = registration.getFullName() != null && !registration.getFullName().isBlank()
+                    ? registration.getFullName()
+                    : (registration.getUser() != null ? registration.getUser().getFullName() : "");
+            Paragraph recipient = new Paragraph(fullName)
+                    .setFontSize(20)
+                    .setBold()
+                    .setTextAlignment(TextAlignment.CENTER);
+            box.add(recipient);
+
+            box.add(new Paragraph(" "));
+
+            // Body
+            String eventTitle = registration.getEvent() != null ? registration.getEvent().getTitle() : "";
+            Paragraph body = new Paragraph()
+                    .add("Đã hoàn thành tham gia sự kiện: ")
+                    .add(eventTitle)
+                    .setFontSize(14)
+                    .setTextAlignment(TextAlignment.CENTER);
+            box.add(body);
+
+            box.add(new Paragraph(" "));
+
+            // Date
+            String date = registration.getCompletedAt() != null ? registration.getCompletedAt().toLocalDate().toString() : "";
+            Paragraph dateP = new Paragraph("Ngày: " + date)
+                    .setFontSize(12)
+                    .setTextAlignment(TextAlignment.CENTER);
+            box.add(dateP);
+
+            box.add(new Paragraph(" "));
+
+            // Signature placeholder
+            Paragraph sig = new Paragraph("Ban tổ chức")
+                    .setFontSize(14)
+                    .setTextAlignment(TextAlignment.RIGHT);
+            box.add(sig);
+
+            document.add(box);
             document.close();
             return dest;
         } catch (Exception e) {

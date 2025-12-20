@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "../../api/axios";
 import { FiCalendar, FiClock, FiMapPin, FiDownload, FiChevronRight } from "react-icons/fi";
 import { Link } from "react-router-dom";
+import { getFileUrl } from "../../utils/files";
 
 export default function TabActivity({ user }) {
   const [activities, setActivities] = useState([]);
@@ -63,8 +64,21 @@ export default function TabActivity({ user }) {
     }
   };
 
-  const downloadCertificate = (url) => {
-    if (!url) return alert("Không có chứng nhận.");
+  const downloadCertificate = (urlOrPath) => {
+    if (!urlOrPath) return alert("Không có chứng nhận.");
+    let url = urlOrPath;
+
+    // If backend returned a path starting with /uploads, prefer the configured VITE_UPLOAD_BASE
+    if (typeof url === "string" && url.startsWith("/uploads/")) {
+      const base = (import.meta.env.VITE_UPLOAD_BASE || "").replace(/\/$/, "");
+      if (base) {
+        url = base + url.replace(/^\/uploads/, "");
+      }
+    } else if (typeof url === "string" && !/^https?:\/\//i.test(url) && !url.startsWith("/")) {
+      // treat as filename like 'certificates/12_certificate.pdf'
+      url = getFileUrl(url);
+    }
+
     window.open(url, "_blank");
   };
 
@@ -198,11 +212,11 @@ export default function TabActivity({ user }) {
                     Chi tiết <FiChevronRight />
                   </Link>
 
-                  {certificateUrl && (
+                  {/* {certificateUrl && (
                     <button onClick={() => downloadCertificate(certificateUrl)} className="text-sm px-3 py-2 bg-blue-600 text-white rounded flex items-center gap-2">
                       <FiDownload /> Chứng nhận
                     </button>
-                  )}
+                  )} */}
                 </div>
 
                 {canCancel && (

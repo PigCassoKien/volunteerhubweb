@@ -127,6 +127,22 @@ export default function EventDetail() {
     }
   };
 
+  const downloadCertificate = async (regId) => {
+    if (!regId) return alert("Không có chứng nhận.");
+    try {
+      // request backend to (re)generate certificate and return public URL
+      const res = await axios.put(`/registrations/generate/${regId}`);
+      const url = res?.data?.url || getFileUrl(`certificates/${regId}_certificate.pdf`);
+      if (!url) return alert("Không thể tạo chứng nhận ngay bây giờ.");
+      window.open(url, "_blank");
+    } catch (err) {
+      console.error(err);
+      // fallback to direct URL
+      const url = getFileUrl(`certificates/${regId}_certificate.pdf`);
+      window.open(url, "_blank");
+    }
+  };
+
   /*Prefill user info*/
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -362,7 +378,16 @@ export default function EventDetail() {
             </div>
 
             {/* ACTIONS */}
-            <div className="mt-6">{renderRegisterButton()}</div>
+            <div className="mt-6">{renderRegisterButton()}
+              {registrationStatus === "COMPLETED" && registrationId && (
+                <button
+                  onClick={() => downloadCertificate(registrationId)}
+                  className="ml-3 px-4 py-2 bg-blue-600 text-white rounded-lg"
+                >
+                  Tải chứng nhận
+                </button>
+              )}
+            </div>
           </div>
 
           {/* RIGHT: ASIDE - sticky register + stats */}
