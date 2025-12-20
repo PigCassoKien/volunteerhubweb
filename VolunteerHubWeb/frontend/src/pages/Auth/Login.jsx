@@ -28,6 +28,12 @@ export default function Login() {
       const user = data?.user;
       if (!token || !user) throw new Error("Invalid response from server");
 
+      // Block login if account is locked
+      if (user.status === "BANNED") {
+        setMsg("Tài khoản của bạn đã bị khóa. Liên hệ quản trị viên.");
+        return;
+      }
+
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
 

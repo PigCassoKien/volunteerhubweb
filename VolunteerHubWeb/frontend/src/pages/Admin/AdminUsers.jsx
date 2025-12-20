@@ -13,6 +13,13 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [search, setSearch] = useState("");
+  const [searchTermForFilter, setSearchTermForFilter] = useState("");
+
+  useEffect(() => {
+    setSearchTermForFilter(search.trim().toLowerCase());
+    setPage(1);
+  }, [search]);
 
   const load = async () => {
     try {
@@ -39,7 +46,7 @@ export default function AdminUsers() {
   const lock = async (id) => {
     if (!confirm("Khóa tài khoản này?")) return;
     try {
-      await axios.post(`/users/lock/${id}`);
+      await axios.put(`/users/lock/${id}`);
       setUsers(prev =>
         prev.map(u => u.id === id ? { ...u, status: "BANNED" } : u)
       );
@@ -50,7 +57,7 @@ export default function AdminUsers() {
 
   const unlock = async (id) => {
     try {
-      await axios.post(`/users/unlock/${id}`);
+      await axios.put(`/users/unlock/${id}`);
       setUsers(prev =>
         prev.map(u => u.id === id ? { ...u, status: "ACTIVE" } : u)
       );
@@ -59,10 +66,16 @@ export default function AdminUsers() {
     }
   };
 
-  /*Pagination */
-  const totalPages = Math.ceil(users.length / PAGE_SIZE);
+  /* filter + pagination */
+  const filteredUsers = users.filter(u => {
+    if (!searchTermForFilter) return true;
+    const s = searchTermForFilter;
+    return (u.fullName || "").toLowerCase().includes(s) || (u.email || "").toLowerCase().includes(s);
+  });
 
-  const pagedUsers = users.slice(
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+
+  const pagedUsers = filteredUsers.slice(
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE
   );
@@ -89,6 +102,15 @@ export default function AdminUsers() {
       <div className="flex items-center justify-between mb-6">
         <div className="text-sm text-gray-500">
           Tổng cộng <span className="font-medium text-gray-700">{users.length}</span> người dùng
+        </div>
+        <div className="w-full md:w-1/3">
+          <input
+            type="search"
+            placeholder="Tìm người dùng (tên hoặc email)..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full px-3 py-2 border rounded-md"
+          />
         </div>
       </div>
 

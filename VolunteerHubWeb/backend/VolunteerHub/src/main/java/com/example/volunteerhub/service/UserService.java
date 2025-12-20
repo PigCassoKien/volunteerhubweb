@@ -4,6 +4,7 @@ import com.example.volunteerhub.dto.*;
 import com.example.volunteerhub.entity.User;
 import com.example.volunteerhub.entity.enums.OtpType;
 import com.example.volunteerhub.entity.enums.UserRole;
+import com.example.volunteerhub.entity.enums.RegistrationStatus;
 import com.example.volunteerhub.entity.enums.UserStatus;
 import com.example.volunteerhub.entity.enums.VerificationStatus;
 import com.example.volunteerhub.repository.UserRepository;
@@ -143,9 +144,82 @@ public class UserService {
         }
 
         List<User> all = userRepository.findAll();
-        return all.stream()
-                .map(u -> modelMapper.map(u, UserResponseDTO.class))
-                .collect(Collectors.toList());
+        if (all.isEmpty()) return java.util.Collections.emptyList();
+
+        java.util.List<Long> userIds = all.stream().map(User::getId).toList();
+
+        java.util.Map<Long, Integer> countsMap = new java.util.HashMap<>();
+        java.util.Map<Long, Integer> hoursMap = new java.util.HashMap<>();
+
+        try {
+            java.util.List<Object[]> counts = eventRegistrationRepository.findRegistrationCountsByUserIds(userIds);
+            for (Object[] r : counts) {
+                Number uid = (Number) r[0];
+                Number cnt = (Number) r[1];
+                if (uid != null) countsMap.put(uid.longValue(), cnt != null ? cnt.intValue() : 0);
+            }
+        } catch (Exception ex) {
+            // ignore and leave countsMap empty
+        }
+
+        try {
+            // Compute hours per user with daily cap (max 8 hours per calendar day).
+            for (Long uid : userIds) {
+                java.util.List<com.example.volunteerhub.entity.EventRegistration> regs = eventRegistrationRepository.findByUserId(uid);
+                if (regs == null || regs.isEmpty()) {
+                    hoursMap.put(uid, 0);
+                    continue;
+                }
+
+                java.util.Map<java.time.LocalDate, Double> daily = new java.util.HashMap<>();
+                for (com.example.volunteerhub.entity.EventRegistration r : regs) {
+                    if (r.getEvent() == null || r.getEvent().getStartDate() == null || r.getEvent().getEndDate() == null) continue;
+                    java.time.LocalDateTime s = r.getEvent().getStartDate();
+                    java.time.LocalDateTime e = r.getEvent().getEndDate();
+                    if (e.isBefore(s)) continue;
+
+                    java.time.LocalDate cur = s.toLocalDate();
+                    java.time.LocalDate last = e.toLocalDate();
+                    while (!cur.isAfter(last)) {
+                        java.time.LocalDateTime dayStart = cur.atStartOfDay();
+                        java.time.LocalDateTime dayEnd = dayStart.plusDays(1);
+                        java.time.LocalDateTime overlapStart = s.isAfter(dayStart) ? s : dayStart;
+                        java.time.LocalDateTime overlapEnd = e.isBefore(dayEnd) ? e : dayEnd;
+                        if (overlapEnd.isAfter(overlapStart)) {
+                            long minutes = java.time.Duration.between(overlapStart, overlapEnd).toMinutes();
+                            double hrs = minutes / 60.0;
+                            daily.put(cur, daily.getOrDefault(cur, 0.0) + hrs);
+                        }
+                        cur = cur.plusDays(1);
+                    }
+                }
+
+                double total = 0.0;
+                for (Double d : daily.values()) {
+                    total += Math.min(8.0, d);
+                }
+                hoursMap.put(uid, (int) Math.floor(total));
+            }
+        } catch (Exception ex) {
+            // fallback to SQL summation if complex logic fails
+            try {
+                java.util.List<Object[]> hrs = eventRegistrationRepository.findHoursSumByUserIds(userIds);
+                for (Object[] r : hrs) {
+                    Number uid = (Number) r[0];
+                    Number h = (Number) r[1];
+                    if (uid != null) hoursMap.put(uid.longValue(), h != null ? h.intValue() : 0);
+                }
+            } catch (Exception ex2) {
+                // ignore
+            }
+        }
+
+        return all.stream().map(u -> {
+            UserResponseDTO dto = modelMapper.map(u, UserResponseDTO.class);
+            dto.setEventsCount(countsMap.getOrDefault(u.getId(), 0));
+            dto.setHours(hoursMap.getOrDefault(u.getId(), 0));
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     public List<UserResponseDTO> searchVolunteers(VolunteerSearchRequestDTO searchRequest) {
@@ -309,14 +383,55 @@ public class UserService {
             }
 
             try {
-                java.util.List<Object[]> hrs = eventRegistrationRepository.findHoursSumByUserIds(userIds);
-                for (Object[] r : hrs) {
-                    Number uid = (Number) r[0];
-                    Number h = (Number) r[1];
-                    if (uid != null) hoursMap.put(uid.longValue(), h != null ? h.intValue() : 0);
+                // Compute hours per user with daily cap (max 8 hours per calendar day).
+                for (Long uid : userIds) {
+                    java.util.List<com.example.volunteerhub.entity.EventRegistration> regs = eventRegistrationRepository.findByUserId(uid);
+                    if (regs == null || regs.isEmpty()) {
+                        hoursMap.put(uid, 0);
+                        continue;
+                    }
+
+                    java.util.Map<java.time.LocalDate, Double> daily = new java.util.HashMap<>();
+                    for (com.example.volunteerhub.entity.EventRegistration r : regs) {
+                        if (r.getEvent() == null || r.getEvent().getStartDate() == null || r.getEvent().getEndDate() == null) continue;
+                        java.time.LocalDateTime s = r.getEvent().getStartDate();
+                        java.time.LocalDateTime e = r.getEvent().getEndDate();
+                        if (e.isBefore(s)) continue;
+
+                        java.time.LocalDate cur = s.toLocalDate();
+                        java.time.LocalDate last = e.toLocalDate();
+                        while (!cur.isAfter(last)) {
+                            java.time.LocalDateTime dayStart = cur.atStartOfDay();
+                            java.time.LocalDateTime dayEnd = dayStart.plusDays(1);
+                            java.time.LocalDateTime overlapStart = s.isAfter(dayStart) ? s : dayStart;
+                            java.time.LocalDateTime overlapEnd = e.isBefore(dayEnd) ? e : dayEnd;
+                            if (overlapEnd.isAfter(overlapStart)) {
+                                long minutes = java.time.Duration.between(overlapStart, overlapEnd).toMinutes();
+                                double hrs = minutes / 60.0;
+                                daily.put(cur, daily.getOrDefault(cur, 0.0) + hrs);
+                            }
+                            cur = cur.plusDays(1);
+                        }
+                    }
+
+                    double total = 0.0;
+                    for (Double d : daily.values()) {
+                        total += Math.min(8.0, d);
+                    }
+                    hoursMap.put(uid, (int) Math.floor(total));
                 }
             } catch (Exception ex) {
-                // ignore
+                // fallback to existing sql query when something unexpected happens
+                try {
+                    java.util.List<Object[]> hrs = eventRegistrationRepository.findHoursSumByUserIds(userIds);
+                    for (Object[] r : hrs) {
+                        Number uid = (Number) r[0];
+                        Number h = (Number) r[1];
+                        if (uid != null) hoursMap.put(uid.longValue(), h != null ? h.intValue() : 0);
+                    }
+                } catch (Exception ex2) {
+                    // ignore
+                }
             }
         }
 
@@ -349,8 +464,11 @@ public class UserService {
     public java.util.List<com.example.volunteerhub.dto.VolunteerRankDTO> getTopVolunteers(int limit) {
         int safeLimit = Math.max(1, limit);
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, safeLimit);
-        java.util.List<Object[]> rows = eventRegistrationRepository.findTopVolunteersByRegistrationCount(com.example.volunteerhub.entity.enums.RegistrationStatus.APPROVED, pageable);
+        java.util.List<com.example.volunteerhub.entity.enums.RegistrationStatus> statuses = java.util.Arrays.asList(com.example.volunteerhub.entity.enums.RegistrationStatus.APPROVED, com.example.volunteerhub.entity.enums.RegistrationStatus.COMPLETED);
+        java.util.List<Object[]> rows = eventRegistrationRepository.findTopVolunteersByRegistrationCounts(statuses, pageable);
         java.util.List<com.example.volunteerhub.dto.VolunteerRankDTO> out = new java.util.ArrayList<>();
+        // gather userIds to compute hours in batch
+        java.util.List<Long> userIds = new java.util.ArrayList<>();
         for (Object[] row : rows) {
             Number userIdNum = (Number) row[0];
             Number cnt = (Number) row[1];
@@ -370,6 +488,66 @@ public class UserService {
             }
             dto.setRegistrations(registrations);
             out.add(dto);
+            if (userId != null) userIds.add(userId);
+        }
+
+        // compute hours for each user (apply 8-hour daily cap)
+        java.util.Map<Long, Integer> hoursMap = new java.util.HashMap<>();
+        try {
+            for (Long uid : userIds) {
+                java.util.List<com.example.volunteerhub.entity.EventRegistration> regs = eventRegistrationRepository.findByUserId(uid);
+                if (regs == null || regs.isEmpty()) {
+                    hoursMap.put(uid, 0);
+                    continue;
+                }
+
+                java.util.Map<java.time.LocalDate, Double> daily = new java.util.HashMap<>();
+                for (com.example.volunteerhub.entity.EventRegistration r : regs) {
+                    if (r.getEvent() == null || r.getEvent().getStartDate() == null || r.getEvent().getEndDate() == null) continue;
+                    java.time.LocalDateTime s = r.getEvent().getStartDate();
+                    java.time.LocalDateTime e = r.getEvent().getEndDate();
+                    if (e.isBefore(s)) continue;
+
+                    java.time.LocalDate cur = s.toLocalDate();
+                    java.time.LocalDate last = e.toLocalDate();
+                    while (!cur.isAfter(last)) {
+                        java.time.LocalDateTime dayStart = cur.atStartOfDay();
+                        java.time.LocalDateTime dayEnd = dayStart.plusDays(1);
+                        java.time.LocalDateTime overlapStart = s.isAfter(dayStart) ? s : dayStart;
+                        java.time.LocalDateTime overlapEnd = e.isBefore(dayEnd) ? e : dayEnd;
+                        if (overlapEnd.isAfter(overlapStart)) {
+                            long minutes = java.time.Duration.between(overlapStart, overlapEnd).toMinutes();
+                            double hrs = minutes / 60.0;
+                            daily.put(cur, daily.getOrDefault(cur, 0.0) + hrs);
+                        }
+                        cur = cur.plusDays(1);
+                    }
+                }
+
+                double total = 0.0;
+                for (Double d : daily.values()) {
+                    total += Math.min(8.0, d);
+                }
+                hoursMap.put(uid, (int) Math.floor(total));
+            }
+        } catch (Exception ex) {
+            // fallback: try SQL aggregation
+            try {
+                java.util.List<Object[]> hrs = eventRegistrationRepository.findHoursSumByUserIds(userIds);
+                for (Object[] r : hrs) {
+                    Number uid = (Number) r[0];
+                    Number h = (Number) r[1];
+                    if (uid != null) hoursMap.put(uid.longValue(), h != null ? h.intValue() : 0);
+                }
+            } catch (Exception ex2) {
+                // ignore
+            }
+        }
+
+        // attach hours to output dtos
+        for (com.example.volunteerhub.dto.VolunteerRankDTO dto : out) {
+            Long uid = dto.getUserId();
+            dto.setHours(hoursMap.getOrDefault(uid, 0));
         }
         return out;
     }

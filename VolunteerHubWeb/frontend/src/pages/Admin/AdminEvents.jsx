@@ -8,6 +8,17 @@ export default function AdminEvents() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 6;
+  const [search, setSearch] = useState("");
+  const [searchTermForFilter, setSearchTermForFilter] = useState("");
+
+  useEffect(() => {
+    setSearchTermForFilter(search.trim().toLowerCase());
+    setPage(1);
+  }, [search]);
+  const [timeFilter, setTimeFilter] = useState("ALL"); // ALL | UPCOMING | ONGOING | ENDED
+  const [showNotApproved, setShowNotApproved] = useState(false);
+
+  useEffect(() => { setPage(1); }, [timeFilter, showNotApproved]);
 
   const loadEvents = async () => {
     try {
@@ -60,15 +71,94 @@ export default function AdminEvents() {
     }
   };
 
-  if (loading) return <AdminLayout title="Quản lý sự kiện"><div>Đang tải sự kiện...</div></AdminLayout>;
-  if (!events.length) return <AdminLayout title="Quản lý sự kiện"><div className="text-center text-gray-500">Không có sự kiện</div></AdminLayout>;
+  const matchesTime = (e) => {
+    if (timeFilter === "ALL") return true;
+    const now = Date.now();
+    const start = e.startDate ? new Date(e.startDate).getTime() : null;
+    const end = e.endDate ? new Date(e.endDate).getTime() : null;
+    if (timeFilter === "UPCOMING") return start != null && start > now;
+    if (timeFilter === "ONGOING") return start != null && end != null && start <= now && end >= now;
+    if (timeFilter === "ENDED") return end != null && end < now;
+    return true;
+  };
 
-  const totalPages = Math.max(1, Math.ceil(events.length / PAGE_SIZE));
+  const filtered = events.filter((e) => {
+    if (showNotApproved && String(e.status).toUpperCase() === "APPROVED") return false;
+    if (!matchesTime(e)) return false;
+    if (!searchTermForFilter) return true;
+    const s = searchTermForFilter;
+    return (
+      (e.title || "").toLowerCase().includes(s) ||
+      (e.location || "").toLowerCase().includes(s) ||
+      (e.category?.name || "").toLowerCase().includes(s) ||
+      (e.createdByFullName || "").toLowerCase().includes(s)
+    );
+  });
+
+  if (loading) return (
+    <AdminLayout title="Quản lý sự kiện">
+      <div>Đang tải sự kiện...</div>
+    </AdminLayout>
+  );
+
+  if (!events.length) return (
+    <AdminLayout title="Quản lý sự kiện">
+      <div className="text-center text-gray-500">Không có sự kiện</div>
+    </AdminLayout>
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const startIndex = (page - 1) * PAGE_SIZE;
-  const paged = events.slice(startIndex, startIndex + PAGE_SIZE);
+  const paged = filtered.slice(startIndex, startIndex + PAGE_SIZE);
 
   return (
     <AdminLayout title="Quản lý sự kiện">
+      <div className="mb-4">
+        <input
+          type="search"
+          placeholder="Tìm sự kiện (nhanh)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full md:w-1/2 px-4 py-2 border rounded-md"
+        />
+      </div>
+      {/* Filter buttons: time segmented + not-approved toggle */}
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2">
+          {[
+            { key: "ALL", label: "Tất cả" },
+            { key: "UPCOMING", label: "Sắp tới" },
+            { key: "ONGOING", label: "Đang diễn ra" },
+            { key: "ENDED", label: "Đã kết thúc" },
+          ].map((b) => (
+            <button
+              key={b.key}
+              onClick={() => setTimeFilter(b.key)}
+              className={`px-3 py-1 rounded-md text-sm border ${timeFilter === b.key ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showNotApproved}
+              onChange={() => setShowNotApproved(v => !v)}
+              className="w-4 h-4"
+            />
+            <span>Chưa duyệt</span>
+          </label>
+          <button
+            onClick={() => { setTimeFilter('ALL'); setShowNotApproved(false); setSearch(''); }}
+            className="px-3 py-1 border rounded-md text-sm hover:bg-gray-50"
+          >
+            Đặt lại
+          </button>
+        </div>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {paged.map((ev) => (
           <div key={ev.id} className="relative">

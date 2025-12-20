@@ -6,6 +6,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import com.example.volunteerhub.repository.UserRepository;
+import com.example.volunteerhub.entity.User;
+import com.example.volunteerhub.entity.enums.UserStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -25,6 +28,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Autowired
     private UserDetailsService userDetailsService;
 
+    @Autowired
+    private UserRepository userRepository;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
@@ -42,6 +48,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            // If user exists but is banned, reject immediately
+            try {
+                User u = userRepository.findByEmail(username).orElse(null);
+                if (u != null && u.getStatus() == UserStatus.BANNED) {
+                    response.sendError(HttpServletResponse.SC_FORBIDDEN, "Account locked");
+                    return;
+                }
+            } catch (Exception ignore) {
+            }
+
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
             boolean isTokenValid = false;
             try {

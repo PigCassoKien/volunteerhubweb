@@ -1,4 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
+import avatar1 from "../images/avt1.jpg";
+import avatar2 from "../images/avt2.jpg";
+import avatar3 from "../images/avt3.jpg";
+import { useLocation, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
 import EventCard from "../components/EventCard";
 import Banner from "../components/Banner";
@@ -56,6 +60,25 @@ export default function Home() {
   const [favoriteIds, setFavoriteIds] = useState(new Set());
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 6;
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // helper: weight upcoming < ongoing < ended
+  const getTimeWeight = (e) => {
+    const now = Date.now();
+    const startMs = e.startDate ? new Date(e.startDate).getTime() : null;
+    const endMs = e.endDate ? new Date(e.endDate).getTime() : null;
+    let state = "upcoming";
+    if (startMs != null && endMs != null) {
+      if (now < startMs) state = "upcoming";
+      else if (now >= startMs && now <= endMs) state = "ongoing";
+      else state = "ended";
+    } else if (endMs != null) {
+      state = now <= endMs ? "ongoing" : "ended";
+    }
+    return state === "upcoming" ? 0 : state === "ongoing" ? 1 : 2;
+  };
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -139,24 +162,9 @@ export default function Home() {
         } catch (_) { }
 
         // ưu tiên sự kiện chưa bắt đầu -> đang diễn ra -> đã kết thúc; favorites trong cùng nhóm
-        const timeStateWeight = (e) => {
-          const now = Date.now();
-          const startMs = e.startDate ? new Date(e.startDate).getTime() : null;
-          const endMs = e.endDate ? new Date(e.endDate).getTime() : null;
-          let state = "upcoming";
-          if (startMs && endMs) {
-            if (now < startMs) state = "upcoming";
-            else if (now >= startMs && now <= endMs) state = "ongoing";
-            else state = "ended";
-          } else if (endMs) {
-            state = now <= endMs ? "ongoing" : "ended";
-          }
-          return state === "upcoming" ? 0 : state === "ongoing" ? 1 : 2;
-        };
-
         const sorted = publicEvents.sort((a, b) => {
-          const wa = timeStateWeight(a);
-          const wb = timeStateWeight(b);
+          const wa = getTimeWeight(a);
+          const wb = getTimeWeight(b);
           if (wa !== wb) return wa - wb;
 
           const fa = favIds.has(String(a.id)) ? 0 : 1;
@@ -217,21 +225,23 @@ export default function Home() {
   const startIndex = (page - 1) * PAGE_SIZE;
   const pagedEvents = (filteredEvents || []).slice(startIndex, startIndex + PAGE_SIZE);
 
+  // (moved) read/sync page params further below after dashboard state declarations
+
   const testimonials = [
     {
-      avatar: "https://source.unsplash.com/100x100/?woman,portrait,1",
+      avatar: avatar1,
       name: "Nguyễn Thị Mai",
       role: "Tình nguyện viên",
       quote: "Tham gia Volunteer Hub đã thay đổi cuộc sống của tôi. Tôi đã gặp được nhiều người bạn tuyệt vời và cùng nhau tạo ra những đóng góp tích cực cho cộng đồng.",
     },
     {
-      avatar: "https://source.unsplash.com/100x100/?man,portrait,2",
+      avatar: avatar2,
       name: "Trần Văn Hưng",
       role: "Quản lý sự kiện",
       quote: "Nền tảng này giúp tôi dễ dàng tìm kiếm và quản lý các hoạt động tình nguyện. Giao diện thân thiện và tính năng đa dạng.",
     },
     {
-      avatar: "https://source.unsplash.com/100x100/?woman,portrait,3",
+      avatar: avatar3,
       name: "Lê Thị Hoa",
       role: "Sinh viên",
       quote: "Là sinh viên, tôi có thể tham gia các hoạt động tình nguyện phù hợp với lịch học. Đây là cách tuyệt vời để phát triển bản thân.",
@@ -245,6 +255,32 @@ export default function Home() {
   const [trendingPage, setTrendingPage] = useState(1);
   const [postPage, setPostPage] = useState(1);
   const DASH_PAGE_SIZE = 5;
+
+  // read page params from URL on mount (for linking/search that includes page)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const p = parseInt(params.get("page") || "1", 10) || 1;
+    const np = parseInt(params.get("newEventPage") || "1", 10) || 1;
+    const tp = parseInt(params.get("trendingPage") || "1", 10) || 1;
+    const pp = parseInt(params.get("postPage") || "1", 10) || 1;
+    setPage(p);
+    setNewEventPage(np);
+    setTrendingPage(tp);
+    setPostPage(pp);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  // sync some page states back to URL so links can target them
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if ((page || 1) > 1) params.set("page", String(page)); else params.delete("page");
+    if ((newEventPage || 1) > 1) params.set("newEventPage", String(newEventPage)); else params.delete("newEventPage");
+    if ((trendingPage || 1) > 1) params.set("trendingPage", String(trendingPage)); else params.delete("trendingPage");
+    if ((postPage || 1) > 1) params.set("postPage", String(postPage)); else params.delete("postPage");
+    const search = params.toString();
+    navigate(`${location.pathname}${search ? `?${search}` : ""}`, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, newEventPage, trendingPage, postPage]);
 
   const parseScore = (desc) => {
     if (!desc) return 0;
@@ -282,6 +318,12 @@ export default function Home() {
           if (fromNew) return fromNew.title;
           const fromTrending = (data.trendingEvents || []).find(e => e.id === nid);
           if (fromTrending) return fromTrending.title;
+          // try to read title from newPosts entries (PostDTO.eventTitle)
+          const fromPost = (data.newPosts || []).find(p => p.eventId === nid && p.eventTitle);
+          if (fromPost) return fromPost.eventTitle;
+          // fallback: try local events state (client-side list)
+          const fromAll = (events || []).find(ev => Number(ev.id) === nid);
+          if (fromAll) return fromAll.title;
           return null;
         };
 
@@ -387,7 +429,12 @@ export default function Home() {
               </div>
 
               <ul className="divide-y flex-1">
-                {paginateArr(dashboard.newEvents, newEventPage, DASH_PAGE_SIZE).map(ev => (
+                {paginateArr((dashboard.newEvents || []).slice().sort((a,b) => {
+                  const wa = getTimeWeight(a);
+                  const wb = getTimeWeight(b);
+                  if (wa !== wb) return wa - wb;
+                  return new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime();
+                }), newEventPage, DASH_PAGE_SIZE).map(ev => (
                   <li key={ev.id}>
                     <Link to={`/events/${ev.id}`} className="block px-4 py-3 hover:bg-emerald-50 transition">
                       <div className="font-medium text-gray-800 line-clamp-1">{ev.title}</div>
@@ -430,7 +477,12 @@ export default function Home() {
               </div>
 
               <ul className="divide-y flex-1">
-                {paginateArr((dashboard.trendingEvents || []).slice().sort((a,b)=> parseScore(b.description) - parseScore(a.description)), trendingPage, DASH_PAGE_SIZE).map(ev => (
+                {paginateArr((dashboard.trendingEvents || []).slice().sort((a,b) => {
+                  const wa = getTimeWeight(a);
+                  const wb = getTimeWeight(b);
+                  if (wa !== wb) return wa - wb;
+                  return parseScore(b.description) - parseScore(a.description);
+                }), trendingPage, DASH_PAGE_SIZE).map(ev => (
                   <li key={ev.id}>
                     <Link to={`/events/${ev.id}`} className="block px-4 py-3 hover:bg-blue-50 transition">
                       <div className="font-medium text-gray-800 line-clamp-1">

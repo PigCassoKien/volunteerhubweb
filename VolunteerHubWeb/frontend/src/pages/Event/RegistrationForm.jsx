@@ -1,31 +1,38 @@
 import React, { useState } from "react";
-import { set } from "react-hook-form";
+import * as yup from "yup";
 
 const RegistrationForm = ({ formData, setFormData, onClose, onSubmit }) => {
   const [errors, setErrors] = useState({});
-  const validate = () => {
-    const newErrors = {};
+  const schema = yup.object().shape({
+    fullName: yup.string().trim().required("Không được để trống"),
+    address: yup.string().trim().required("Không được để trống"),
+    occupation: yup.string().trim().required("Không được để trống"),
+    phone: yup
+      .string()
+      .trim()
+      .required("Không được để trống")
+      .matches(/^[0-9+()\-\s.]{6,}$/, "Số điện thoại không hợp lệ"),
+    email: yup.string().trim().required("Không được để trống").email("Email không hợp lệ"),
+    confirmation: yup.boolean().oneOf([true], "Bạn cần xác nhận thông tin"),
+  });
 
-    if (!formData.fullName?.trim())
-      newErrors.fullName = "Không được để trống";
-
-    if (!formData.address?.trim())
-      newErrors.address = "Không được để trống";
-
-    if (!formData.occupation?.trim())
-      newErrors.occupation = "Không được để trống";
-
-    if (!formData.phone?.trim())
-      newErrors.phone = "Không được để trống";
-
-    if (!formData.email?.trim())
-      newErrors.email = "Không được để trống";
-
-    if (!formData.confirmation)
-      newErrors.confirmation = "Bạn cần xác nhận thông tin";
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  const validate = async () => {
+    try {
+      await schema.validate(formData, { abortEarly: false });
+      setErrors({});
+      return true;
+    } catch (err) {
+      const newErrors = {};
+      if (err && err.inner && err.inner.length) {
+        err.inner.forEach((e) => {
+          if (e.path && !newErrors[e.path]) newErrors[e.path] = e.message;
+        });
+      } else if (err && err.path) {
+        newErrors[err.path] = err.message;
+      }
+      setErrors(newErrors);
+      return false;
+    }
   };
   return (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">

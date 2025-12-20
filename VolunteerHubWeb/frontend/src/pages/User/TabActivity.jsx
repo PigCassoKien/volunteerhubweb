@@ -3,33 +3,40 @@ import axios from "../../api/axios";
 import { FiCalendar, FiClock, FiMapPin, FiDownload, FiChevronRight } from "react-icons/fi";
 import { Link } from "react-router-dom";
 
-export default function TabActivity() {
+export default function TabActivity({ user }) {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
   const token = localStorage.getItem("token");
+  const viewingOther = user && user.id && (!storedUser || user.id !== storedUser.id);
 
   useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      setActivities([]);
-      return;
-    }
-
     const fetchHistory = async () => {
       setLoading(true);
       setError(null);
       try {
-        // call backend history endpoint - send empty filter to get all
-        const res = await axios.post("/registrations/history", {
-          startDate: null,
-          endDate: null,
-          status: null,
-          categoryId: null,
-          sortBy: "dateDesc",
-        });
+        let res;
+        if (viewingOther) {
+          // public endpoint for other user's registrations
+          res = await axios.get(`/registrations/user/${user.id}`);
+        } else {
+          if (!token) {
+            setActivities([]);
+            setLoading(false);
+            return;
+          }
+          // call backend history endpoint for current user
+          res = await axios.post("/registrations/history", {
+            startDate: null,
+            endDate: null,
+            status: null,
+            categoryId: null,
+            sortBy: "dateDesc",
+          });
+        }
+
         const list = Array.isArray(res.data) ? res.data : [];
         setActivities(list);
       } catch (err) {
@@ -41,7 +48,7 @@ export default function TabActivity() {
     };
 
     fetchHistory();
-  }, [token]);
+  }, [token, user]);
 
   const handleCancel = async (regId) => {
     if (!confirm("Bạn chắc chắn muốn huỷ đăng ký này?")) return;
@@ -121,7 +128,7 @@ export default function TabActivity() {
   return (
     <div className="bg-white rounded-xl p-6 shadow-sm">
       <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <FiClock /> Hoạt động của bạn
+        <FiClock /> {viewingOther ? `Hoạt động của ${user.fullName || 'người dùng'}` : 'Hoạt động của bạn'}
       </h2>
 
       <div className="flex flex-col gap-4">
@@ -141,7 +148,7 @@ export default function TabActivity() {
           const canCancel = status === "APPROVED" && !eventStarted;
 
           return (
-            <div key={item.id} className="border rounded-xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div key={item.id} className="border rounded-xl p-4 flex flex-col md:flex-row md:items-center gap-3">
               <div className="flex-1">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -185,7 +192,7 @@ export default function TabActivity() {
                 ) : null}
               </div>
 
-              <div className="flex flex-col items-end gap-2">
+              <div className="flex flex-col items-end gap-2 md:w-44">
                 <div className="flex gap-2">
                   <Link to={`/events/${eventId}`} className="text-sm px-3 py-2 border rounded hover:bg-gray-50 flex items-center gap-2">
                     Chi tiết <FiChevronRight />

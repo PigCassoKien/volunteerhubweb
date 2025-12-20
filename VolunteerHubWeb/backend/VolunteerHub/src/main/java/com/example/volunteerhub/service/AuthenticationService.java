@@ -36,6 +36,11 @@ public class AuthenticationService {
         User user = userRepository.findByEmail(loginRequest.getEmail())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
+                // refuse login for locked/banned accounts
+                if (user.getStatus() != null && user.getStatus().name().equals("BANNED")) {
+                        throw new RuntimeException("Account locked");
+                }
+
         // Tạo JWT token
         String jwtToken = jwtService.generateToken(user, ipAddress);
 

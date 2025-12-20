@@ -62,6 +62,15 @@ function Navbar() {
     updateAuthState();
   }, [location.pathname]);
 
+  // Show modal + force logout when account becomes locked
+  const [showLockedModal, setShowLockedModal] = useState(false);
+  useEffect(() => {
+    if (user && user.status === "BANNED") {
+      // show modal; delay a tick to allow render
+      setShowLockedModal(true);
+    }
+  }, [user]);
+
   // Dropdown user
   const [open, setOpen] = useState(false);
 
@@ -276,6 +285,27 @@ function Navbar() {
 
       {/* Modal Liên hệ */}
       <ContactModal open={openContact} onClose={() => setOpenContact(false)} />
+
+      {/* Account locked modal */}
+      {showLockedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full text-center">
+            <h3 className="text-lg font-semibold mb-3">Tài khoản bị khóa</h3>
+            <p className="text-sm text-gray-700 mb-4">Tài khoản của bạn đã bị khóa bởi quản trị viên. Bạn sẽ được đăng xuất.</p>
+            <div className="flex justify-center">
+              <button
+                onClick={() => {
+                  setShowLockedModal(false);
+                  handleLogout();
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded-md"
+              >
+                Đóng và đăng xuất
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

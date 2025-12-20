@@ -93,32 +93,37 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// helper: compose a friendly body text from structured payload
+// helper: compose a formal, human-friendly body text from structured payload
+function stripHtml(s) {
+  return String(s || '').replace(/<[^>]*>/g, '').trim();
+}
+
 function buildNotificationBody(data) {
-  // Prefer explicit content fields
-  if (data.preview) return data.preview;
-  const parts = [];
-  if (data.subtitle) parts.push(data.subtitle);
-  if (data.eventTitle) parts.push(`Sự kiện: ${data.eventTitle}`);
-  if (data.organizer) parts.push(`Ban tổ chức: ${data.organizer}`);
-  if (data.body && typeof data.body === 'string') {
-    // If body looks like JSON serialized string, try to parse
-    const trimmed = data.body.trim();
-    if ((trimmed.startsWith('{') || trimmed.startsWith('['))) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (parsed && typeof parsed === 'object') {
-          if (parsed.content) parts.push(parsed.content);
-          else parts.push(JSON.stringify(parsed));
-        }
-      } catch (e) {
-        parts.push(data.body);
-      }
-    } else {
-      parts.push(data.body);
-    }
+  // Prefer an explicit content/message field when present
+  const content = data.content || data.message || data.preview;
+  if (content) return stripHtml(content);
+
+  // If body is a plain string, use it (cleaned) without prepending key names
+  if (typeof data.body === 'string' && data.body.trim().length > 0) {
+    return stripHtml(data.body);
   }
-  // Fallback: single-line summary
-  if (parts.length === 0 && data.title) return data.title;
-  return parts.join('\n');
+
+  // If body is an object (already parsed), try to extract common fields
+  if (data.body && typeof data.body === 'object') {
+    if (data.body.content) return stripHtml(data.body.content);
+    if (data.body.message) return stripHtml(data.body.message);
+  }
+
+  // Compose from known structured pieces when available
+  const parts = [];
+  if (data.organizer) parts.push(`Ban tổ chức: ${stripHtml(data.organizer)}`);
+  if (data.eventTitle) parts.push(`Sự kiện: ${stripHtml(data.eventTitle)}`);
+  if (data.subtitle) parts.push(stripHtml(data.subtitle));
+
+  if (parts.length > 0) return parts.join('\n');
+
+  // Last fallback: use title (without key labels)
+  if (data.title) return stripHtml(data.title);
+
+  return '';
 }

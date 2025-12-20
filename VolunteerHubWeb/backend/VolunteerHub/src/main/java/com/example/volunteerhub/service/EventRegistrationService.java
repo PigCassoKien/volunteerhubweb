@@ -231,6 +231,39 @@ public class EventRegistrationService {
         }).collect(Collectors.toList());
     }
 
+    // Public: fetch registrations for a given user id (used to display another user's activity)
+    public List<EventRegistrationDTO> getRegistrationsByUserId(Long userId) {
+        List<EventRegistration> regs = registrationRepository.findByUserId(userId);
+        if (regs == null) return new ArrayList<>();
+
+        return regs.stream().map(reg -> {
+            EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
+            dto.setId(reg.getId());
+            dto.setUserId(reg.getUser() != null ? reg.getUser().getId() : null);
+            dto.setEventId(reg.getEvent() != null ? reg.getEvent().getId() : null);
+            dto.setStatus(reg.getStatus());
+            dto.setRegisteredAt(reg.getRegisteredAt());
+            dto.setCompletedAt(reg.getCompletedAt());
+
+            if (reg.getEvent() != null) {
+                dto.setEventTitle(reg.getEvent().getTitle());
+                dto.setEventStartDate(reg.getEvent().getStartDate());
+                dto.setEventLocation(reg.getEvent().getLocation());
+            }
+
+            dto.setFullName(reg.getFullName());
+            dto.setPhone(reg.getPhone());
+            dto.setExperience(reg.getExperience());
+            dto.setSkills(reg.getSkills());
+            dto.setCertificateUrl(null);
+            dto.setCancellationReason(reg.getCancellationReason());
+            dto.setCanceledAt(reg.getCanceledAt());
+            dto.setCanceledByName(reg.getCanceledBy() != null ? reg.getCanceledBy().getFullName() : null);
+
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
     // Update
     public EventRegistrationDTO approveRegistration(Long registrationId, String managerEmail) {
         EventRegistration reg = registrationRepository.findById(registrationId).orElseThrow(() -> new RuntimeException("Registration not found"));

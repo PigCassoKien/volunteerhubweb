@@ -5,6 +5,9 @@ import EventCard from "../../components/EventCard";
 
 export default function EventListManager({ events = [], onEdit, onRefresh }) {
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [searchTermForFilter, setSearchTermForFilter] = useState("");
+  React.useEffect(() => { setSearchTermForFilter(search.trim().toLowerCase()); setPage(1); }, [search]);
   const PAGE_SIZE = 6;
 
   const handleDelete = async (id) => {
@@ -17,13 +20,34 @@ export default function EventListManager({ events = [], onEdit, onRefresh }) {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil((events?.length || 0) / PAGE_SIZE));
+  const filtered = (events || []).filter(e => {
+    if (!searchTermForFilter) return true;
+    const s = searchTermForFilter;
+    return (
+      (e.title || "").toLowerCase().includes(s) ||
+      (e.location || "").toLowerCase().includes(s) ||
+      (e.category?.name || "").toLowerCase().includes(s) ||
+      (e.createdByFullName || "").toLowerCase().includes(s)
+    );
+  });
+
+  const totalPages = Math.max(1, Math.ceil((filtered?.length || 0) / PAGE_SIZE));
   const start = (page - 1) * PAGE_SIZE;
-  const paged = events.slice(start, start + PAGE_SIZE);
+  const paged = filtered.slice(start, start + PAGE_SIZE);
 
   return (
     <div className="bg-white p-4 rounded shadow mb-6">
       <h3 className="font-semibold mb-3">Danh sách sự kiện của bạn</h3>
+
+      <div className="mb-3">
+        <input
+          type="search"
+          placeholder="Tìm nhanh..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full md:w-1/2 px-3 py-2 border rounded-md"
+        />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {paged.map((ev) => (

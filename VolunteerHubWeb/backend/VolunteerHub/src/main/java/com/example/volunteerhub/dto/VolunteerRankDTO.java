@@ -8,4 +8,5 @@ public class VolunteerRankDTO {
     private String fullName;
     private String avatarFile;
     private int registrations;
+    private int hours;
 }

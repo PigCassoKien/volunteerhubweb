@@ -4,6 +4,9 @@ import { useNavigate } from "react-router-dom";
 import axios from "../api/axios";
 import { toast } from "react-toastify";
 import { getFileUrl } from "../utils/files";
+import avt4 from "../images/avt4.jpg";
+import avt5 from "../images/avt5.jpg";
+import avt6 from "../images/avt6.jpg";
 
 const sampleVolunteers = [
   {
@@ -51,7 +54,7 @@ const testimonials = [
     id: 1,
     text: "Tham gia Volunteer Hub đã thay đổi cuộc sống của tôi. Tôi đã gặp được nhiều người bạn tuyệt vời và cùng nhau tạo ra những đóng góp tích cực cho cộng đồng.",
     author: "Người dùng ẩn danh",
-    avatar: "/images/default-avatar.jpg",
+    avatar: avt4,
     events: 12,
     hours: 84,
   },
@@ -59,7 +62,7 @@ const testimonials = [
     id: 2,
     text: "Hoạt động tại đây giúp tôi phát triển kỹ năng lãnh đạo và giao tiếp — mỗi dự án là một thử thách bổ ích.",
     author: "Nguyễn Văn B",
-    avatar: "/images/default-avatar.jpg",
+    avatar: avt6,
     events: 8,
     hours: 56,
   },
@@ -67,7 +70,7 @@ const testimonials = [
     id: 3,
     text: "Môi trường ấm áp và nhiệt huyết, tôi luôn muốn đóng góp nhiều hơn cho cộng đồng.",
     author: "Trần Thị C",
-    avatar: "/images/default-avatar.jpg",
+    avatar: avt5,
     events: 5,
     hours: 30,
   },
@@ -177,6 +180,15 @@ const CommunityPage = () => {
   const testimonialsToShow = testimonials;
 
   const navigate = useNavigate();
+
+  const resolveUrl = (f) => {
+    if (!f) return "/images/default-avatar.jpg";
+    if (typeof f !== "string") return f; // imported asset (already a URL)
+    // absolute URLs or public paths should be used as-is
+    if (f.startsWith("http") || f.startsWith("/")) return f;
+    // otherwise treat as uploaded filename and build via getFileUrl
+    return getFileUrl(f);
+  };
 
   const openMessage = (v) => setMessageModal({ open: true, target: v, text: "" });
 
@@ -333,49 +345,64 @@ const CommunityPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {loading ? (
               <div className="col-span-full p-10 text-center">Đang tải...</div>
-            ) : filtered.length === 0 ? (
-              <div className="col-span-full p-6 text-center text-gray-500">Không tìm thấy tình nguyện viên phù hợp.</div>
+            ) : topVolunteers.length === 0 ? (
+              <div className="col-span-full p-6 text-center text-gray-500">Không có dữ liệu tình nguyện viên nổi bật.</div>
             ) : (
-              filtered.map((v) => (
-                <div key={v.id} className="bg-white rounded-2xl p-6 shadow-md">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="relative">
-                      <img src={getFileUrl(v.avatar)} alt="avatar" className="w-24 h-24 object-cover rounded-full border-4 border-white shadow-md" />
-                      <span className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></span>
+              topVolunteers.map((t) => {
+                const v = {
+                  id: t.userId || t.id,
+                  fullName: t.fullName || t.full_name || t.email || "-",
+                  role: t.role || t.userRole || "Tình nguyện viên",
+                  location: t.address || t.location || "",
+                  avatar: t.avatarFile || t.avatar || "/images/default-avatar.jpg",
+                  events: t.registrations || t.eventsCount || 0,
+                  hours: t.hours || 0,
+                  description: t.publicProfile || "",
+                  tags: (t.skills || []).slice(0, 5),
+                  email: t.email,
+                };
+
+                return (
+                  <div key={v.id} className="bg-white rounded-2xl p-6 shadow-md">
+                    <div className="flex flex-col items-center text-center">
+                      <div className="relative">
+                        <img src={resolveUrl(v.avatar)} alt="avatar" className="w-24 h-24 object-cover rounded-full border-4 border-white shadow-md" />
+                        <span className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></span>
+                      </div>
+
+                      <h3 className="text-xl font-semibold mt-4">{v.fullName}</h3>
+                      <p className="text-green-600 font-medium">{v.role}</p>
+
+                      <p className="text-gray-500 text-sm flex items-center gap-1 mt-1"><FiMapPin /> {v.location}</p>
                     </div>
-
-                    <h3 className="text-xl font-semibold mt-4">{v.fullName}</h3>
-                    <p className="text-green-600 font-medium">{v.role}</p>
-
-                    <p className="text-gray-500 text-sm flex items-center gap-1 mt-1"><FiMapPin /> {v.location}</p>
-                  </div>
 
                     <div className="rounded-xl p-4 flex justify-between mt-5 bg-gray-50">
-                    <div className="text-center">
-                      <p className="text-xl font-bold">{v.events}</p>
-                      <p className="text-gray-600 text-sm">Sự kiện</p>
+                      <div className="text-center">
+                        <p className="text-xl font-bold">{v.events}</p>
+                        <p className="text-gray-600 text-sm">Sự kiện</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xl font-bold">{v.hours}</p>
+                        <p className="text-gray-600 text-sm">Giờ</p>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <p className="text-xl font-bold">{v.hours}</p>
-                      <p className="text-gray-600 text-sm">Giờ</p>
+
+                    <p className="text-gray-700 text-sm mt-4">{v.description}</p>
+
+                    <div className="flex flex-wrap gap-2 mt-4">
+                      {(v.tags || []).map((tag, i) => (
+                        <span key={i} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">{tag}</span>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between mt-6">
+                      <ConnectButton v={v} />
+
+                      <button onClick={() => openMessage(v)} className="ml-3 w-10 h-10 border border-gray-300 rounded-lg flex items-center justify-center hover:bg-gray-100">💬</button>
                     </div>
                   </div>
-
-                  <p className="text-gray-700 text-sm mt-4">{v.description}</p>
-
-                  <div className="flex flex-wrap gap-2 mt-4">
-                    {(v.tags || []).map((t, i) => (
-                      <span key={i} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">{t}</span>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center justify-between mt-6">
-                    <ConnectButton v={v} />
-
-                    <button onClick={() => openMessage(v)} className="ml-3 w-10 h-10 border border-gray-300 rounded-lg flex items-center justify-center hover:bg-gray-100">💬</button>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
@@ -385,7 +412,7 @@ const CommunityPage = () => {
             {testimonialsToShow.map((t) => (
               <div key={t.id} className="bg-white rounded-xl p-6 shadow-sm flex gap-4">
                 <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0">
-                  <img src={getFileUrl(t.avatar || "/images/default-avatar.jpg")} alt="av" className="w-full h-full object-cover" />
+                  <img src={resolveUrl(t.avatar || "/images/default-avatar.jpg")} alt="av" className="w-full h-full object-cover" />
                 </div>
                 <div>
                   <p className="text-gray-800">“{t.text}”</p>
@@ -400,7 +427,7 @@ const CommunityPage = () => {
         {tab === "ranking" && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 bg-white rounded-xl p-6 shadow-sm">
-              <h3 className="text-lg font-semibold mb-4">Top tình nguyện viên theo số đăng ký</h3>
+              <h3 className="text-lg font-semibold mb-4">Top tình nguyện viên</h3>
               {topVolunteers.length === 0 ? (
                 <p className="text-gray-500">Không có dữ liệu.</p>
               ) : (
@@ -408,7 +435,7 @@ const CommunityPage = () => {
                   {topVolunteers.map((t, i) => (
                     <li key={t.userId} className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-full overflow-hidden">
-                        <img src={getFileUrl(t.avatarFile || "/images/default-avatar.jpg")} alt="av" className="w-full h-full object-cover" />
+                        <img src={resolveUrl(t.avatarFile || "/images/default-avatar.jpg")} alt="av" className="w-full h-full object-cover" />
                       </div>
                       <div className="flex-1">
                         <div className="font-medium">{t.fullName}</div>
@@ -426,7 +453,7 @@ const CommunityPage = () => {
                     {testimonialsToShow.slice(0, 3).map((tt) => (
                       <div key={tt.id} className="p-3 bg-gray-50 rounded flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full overflow-hidden">
-                          <img src={getFileUrl(tt.avatar || "/images/default-avatar.jpg")} alt="av" className="w-full h-full object-cover" />
+                          <img src={resolveUrl(tt.avatar || "/images/default-avatar.jpg")} alt="av" className="w-full h-full object-cover" />
                         </div>
                         <div>
                           <p className="text-sm text-gray-800">{tt.text}</p>

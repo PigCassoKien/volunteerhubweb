@@ -1,5 +1,6 @@
 import { FiSearch, FiBookmark, FiCalendar, FiX, FiFilter } from "react-icons/fi";
 import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import axios from "../../api/axios";
 import EventCard from "../../components/EventCard";
 import Pagination from "../../components/Pagination";
@@ -16,6 +17,8 @@ export default function EventList() {
   const [search, setSearch] = useState("");
   const [searchTermForFilter, setSearchTermForFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("ALL"); // ALL | UPCOMING | ONGOING | ENDED
+  const location = useLocation();
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 6;
 
@@ -187,15 +190,51 @@ export default function EventList() {
   };
 
   const displayedEvents = (
-    category === "Tất cả"
-      ? events
-      : events.filter((e) => e.category?.name === category)
+    category === "Tất cả" ? events : events.filter((e) => e.category?.name === category)
   ).filter((e) => matchesSearch(e) && matchesTimeFilter(e));
 
-  const filteredEvents = displayedEvents;
+  // sort: upcoming/ongoing first, ended last; favorites preferred within same group
+  const sortedFilteredEvents = displayedEvents.slice().sort((a, b) => {
+    const now = Date.now();
+    const aEnd = a.endDate ? new Date(a.endDate).getTime() : null;
+    const bEnd = b.endDate ? new Date(b.endDate).getTime() : null;
+    const aStart = a.startDate ? new Date(a.startDate).getTime() : null;
+    const bStart = b.startDate ? new Date(b.startDate).getTime() : null;
+
+    const aEnded = aEnd != null ? aEnd < now : false;
+    const bEnded = bEnd != null ? bEnd < now : false;
+    if (aEnded !== bEnded) return aEnded ? 1 : -1;
+
+    // favorites first
+    const fa = favoriteIds.has(String(a.id)) ? 0 : 1;
+    const fb = favoriteIds.has(String(b.id)) ? 0 : 1;
+    if (fa !== fb) return fa - fb;
+
+    // finally by startDate asc
+    return (aStart || 0) - (bStart || 0);
+  });
+
+  const filteredEvents = sortedFilteredEvents;
 
   const totalPages = Math.max(1, Math.ceil(filteredEvents.length / PAGE_SIZE));
   const pageEvents = filteredEvents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // read `page` from query param on mount / when location.search changes
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const p = parseInt(params.get("page") || "1", 10) || 1;
+    setPage(p);
+  }, [location.search]);
+
+  // keep URL in sync when page changes
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if ((page || 1) > 1) params.set("page", String(page));
+    else params.delete("page");
+    const search = params.toString();
+    navigate(`${location.pathname}${search ? `?${search}` : ""}`, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -250,13 +289,17 @@ export default function EventList() {
               type="search"
               placeholder="Tìm kiếm sự kiện..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSearch(v);
+                setSearchTermForFilter(v.trim().toLowerCase());
+              }}
               className="flex-1 text-sm outline-none placeholder-gray-400"
             />
 
             {search && (
               <button
-                onClick={() => setSearch("")}
+                onClick={() => { setSearch(""); setSearchTermForFilter(""); }}
                 className="p-1 rounded-full hover:bg-gray-100 text-gray-500 ml-2"
               >
                 <FiX className="text-lg" />
@@ -265,7 +308,7 @@ export default function EventList() {
           </div>
 
           <button
-            onClick={handleSearch}
+            onClick={() => setSearchTermForFilter(search.trim().toLowerCase())}
             className="flex items-center justify-center gap-2 
              px-8 py-3 min-w-[140px]
              bg-emerald-600 text-white rounded-full text-sm 
@@ -313,14 +356,14 @@ export default function EventList() {
             <FiCalendar className="text-emerald-600" /> Sắp xếp theo
           </p>
 
-          <div className="hidden md:flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+          {/* <div className="hidden md:flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
             <FiFilter className="text-gray-500 mr-2" />
             <select className="bg-transparent text-sm outline-none">
               <option value="date">Ngày diễn ra</option>
               <option value="name">Tên sự kiện</option>
               <option value="participants">Số người tham gia</option>
             </select>
-          </div>
+          </div> */}
           {/* Time filters */}
           <div className="ml-4 flex items-center gap-2">
             <button onClick={() => { setTimeFilter("ALL"); setPage(1); }} className={`px-3 py-1 rounded-full text-sm ${timeFilter==='ALL' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Tất cả</button>

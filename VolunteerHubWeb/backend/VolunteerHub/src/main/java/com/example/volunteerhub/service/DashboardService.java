@@ -138,28 +138,43 @@ public class DashboardService {
             newPosts = postRepository.findByCreatedAtBetween(start, end);
         }
         // only expose APPROVED posts in public dashboard
-        // Determine if requester is a volunteer and which event ids they are approved for
+        // Determine which event ids the requester is allowed to see posts from
         final java.util.Set<Long> allowedEventIds;
-        if (requesterEmail != null) {
+        final boolean allowAllPosts;
+        if (requesterEmail == null) {
+            allowedEventIds = null;
+            allowAllPosts = true;
+        } else {
             java.util.Set<Long> ids = null;
+            boolean all = false;
             try {
                 User requester = userRepository.findByEmail(requesterEmail).orElse(null);
-                if (requester != null && requester.getRole() == UserRole.VOLUNTEER) {
-                    ids = registrationRepository.findByUserId(requester.getId()).stream()
-                            .filter(r -> r.getStatus() == com.example.volunteerhub.entity.enums.RegistrationStatus.APPROVED)
-                            .map(r -> r.getEvent().getId())
-                            .collect(Collectors.toSet());
+                if (requester != null) {
+                    if (requester.getRole() == UserRole.ADMIN) {
+                        all = true; // admin sees all posts
+                    } else if (requester.getRole() == UserRole.EVENT_MANAGER) {
+                        ids = eventRepository.findByCreatedBy(requester.getId()).stream()
+                                .map(Event::getId)
+                                .collect(Collectors.toSet());
+                    } else if (requester.getRole() == UserRole.VOLUNTEER) {
+                        ids = registrationRepository.findByUserId(requester.getId()).stream()
+                                .filter(r -> r.getStatus() == com.example.volunteerhub.entity.enums.RegistrationStatus.APPROVED)
+                                .map(r -> r.getEvent().getId())
+                                .collect(Collectors.toSet());
+                    } else {
+                        ids = java.util.Collections.emptySet();
+                    }
                 }
             } catch (Exception ignored) { }
             allowedEventIds = ids;
-        } else {
-            allowedEventIds = null;
+            allowAllPosts = all;
         }
 
         dashboard.setNewPosts(newPosts.stream()
                 .filter(p -> p.getStatus() == PostStatus.APPROVED)
                 .filter(p -> {
-                    if (allowedEventIds == null) return true; // not a volunteer or not authenticated -> show all approved
+                    if (allowAllPosts) return true;
+                    if (allowedEventIds == null) return true; // fallback: allow all
                     return allowedEventIds.contains(p.getEvent().getId());
                 })
                 .sorted(Comparator.comparing(p -> p.getCreatedAt() == null ? LocalDateTime.MIN : p.getCreatedAt(), Comparator.reverseOrder()))

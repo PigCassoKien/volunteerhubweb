@@ -34,6 +34,8 @@ public interface EventRegistrationRepository extends JpaRepository<EventRegistra
     @Query("SELECT r.user.id as userId, COUNT(r) as registrations FROM EventRegistration r WHERE r.status = :status GROUP BY r.user.id ORDER BY COUNT(r) DESC")
     List<Object[]> findTopVolunteersByRegistrationCount(@Param("status") RegistrationStatus status, org.springframework.data.domain.Pageable pageable);
 
+    @Query("SELECT r.user.id as userId, COUNT(r) as registrations FROM EventRegistration r WHERE r.status IN :statuses GROUP BY r.user.id ORDER BY COUNT(r) DESC")
+    List<Object[]> findTopVolunteersByRegistrationCounts(@Param("statuses") java.util.List<RegistrationStatus> statuses, org.springframework.data.domain.Pageable pageable);
     @Query(value = "SELECT r.user_id as userId, COUNT(*) as registrations FROM event_registration r WHERE r.user_id IN (:userIds) GROUP BY r.user_id", nativeQuery = true)
     List<Object[]> findRegistrationCountsByUserIds(@Param("userIds") List<Long> userIds);
 
