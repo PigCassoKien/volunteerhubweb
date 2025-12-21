@@ -44,20 +44,16 @@ public class ReactionService {
 
     private boolean isEventManagerOrApprovedParticipant(Long eventId, User user) {
         if (user == null) return false;
-        // manager check
         if (user.getRole() != null && user.getRole().toString().contains("EVENT_MANAGER")) {
-            return true; // role-level fast path (Event createdBy check below for stricter equality)
+            return true;
         }
-        // registration check
         return registrationService.hasApproveRegistration(eventId, user.getId());
     }
 
-    // Create or toggle/update reaction: ensure one reaction per user per target
     public ReactionDTO addReaction(ReactionDTO reactionDTO, String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // permission: must be participant or manager for the event
         Long targetEventId = null;
         if (reactionDTO.getPostId() != null) {
             Post post = postRepository.findById(reactionDTO.getPostId())
@@ -75,18 +71,15 @@ public class ReactionService {
             throw new RuntimeException("Unauthorized to react");
         }
 
-        // handle post reaction
         if (reactionDTO.getPostId() != null) {
             Long postId = reactionDTO.getPostId();
             Reaction existing = reactionRepository.findByPostIdAndUserId(postId, user.getId()).orElse(null);
 
             if (existing != null) {
-                // same type => toggle off (delete)
                 if (existing.getReactionType() == reactionDTO.getReactionType()) {
                     reactionRepository.delete(existing);
                     return null;
                 }
-                // different type => update
                 existing.setReactionType(reactionDTO.getReactionType());
                 existing.setUpdatedAt(LocalDateTime.now());
                 existing = reactionRepository.save(existing);
@@ -98,9 +91,7 @@ public class ReactionService {
                 r.setPost(post);
                 r.setReactionType(reactionDTO.getReactionType());
                 r.setCreatedAt(LocalDateTime.now());
-                // after creating/saving reaction (for post)
                 Reaction saved = reactionRepository.save(r);
-                // notify recipient
                 Long recipientUserId = post.getUser().getId();
                 if (!recipientUserId.equals(user.getId())) {
                     notificationService.notifyReaction(recipientUserId, post.getId(), RelatedType.POST, saved.getReactionType(), user.getId());
@@ -109,7 +100,6 @@ public class ReactionService {
             }
         }
 
-        // handle comment reaction
         if (reactionDTO.getCommentId() != null) {
             Long commentId = reactionDTO.getCommentId();
             Reaction existing = reactionRepository.findByCommentIdAndUserId(commentId, user.getId()).orElse(null);
@@ -131,7 +121,6 @@ public class ReactionService {
                 r.setReactionType(reactionDTO.getReactionType());
                 r.setCreatedAt(LocalDateTime.now());
                 r = reactionRepository.save(r);
-                // include actor user id so NotificationService can display actor's name
                 notificationService.notifyReaction(comment.getUser().getId(), comment.getId(), RelatedType.COMMENT, r.getReactionType(), user.getId());
                 return modelMapper.map(r, ReactionDTO.class);
             }
@@ -145,7 +134,6 @@ public class ReactionService {
         Reaction reaction = reactionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Reaction not found"));
 
-        // allow if requester is in the same event (post/comment -> event)
         Long eventId = null;
         if (reaction.getPost() != null) {
             eventId = reaction.getPost().getEvent().getId();

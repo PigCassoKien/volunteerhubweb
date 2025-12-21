@@ -10,8 +10,7 @@ public class PushSubscription {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // web push endpoints can be very long -> increase column length
-    @Column(nullable = false, length = 2000, unique = true) // make endpoint unique to avoid duplicates
+    @Column(nullable = false, length = 2000, unique = true)
     private String endpoint;
 
     @Column(nullable = false, length = 5000)

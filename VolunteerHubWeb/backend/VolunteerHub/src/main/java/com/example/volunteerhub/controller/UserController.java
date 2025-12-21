@@ -57,7 +57,6 @@ public class UserController {
     })
     public ResponseEntity<UserResponseDTO> getUserById(@PathVariable Long id, Authentication authentication) {
         try {
-            // If caller is authenticated, we could use more detailed service method in future.
             UserResponseDTO dto = userService.getPublicProfileById(id);
             return ResponseEntity.ok(dto);
         } catch (RuntimeException ex) {
@@ -66,7 +65,6 @@ public class UserController {
     }
 
     @GetMapping("/all")
-    // keep method-level protection but also validate inside to return proper status codes
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<UserResponseDTO>> getAllUsers(Authentication authentication) {
         if (authentication == null) {
@@ -79,7 +77,6 @@ public class UserController {
         } catch (org.springframework.security.access.AccessDeniedException ade) {
             return ResponseEntity.status(403).build();
         } catch (RuntimeException ex) {
-            // log kept by GlobalExceptionHandler as well — return 500 for unexpected
             return ResponseEntity.status(500).build();
         }
     }

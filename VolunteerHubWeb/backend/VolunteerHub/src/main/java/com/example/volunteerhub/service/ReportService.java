@@ -44,7 +44,6 @@ public class ReportService {
         report.setEventId(eventId);
         report.setEventTitle(event.getTitle());
 
-        // Prefer count queries to avoid loading large collections into memory
         report.setTotalParticipants((int) registrationRepository.countByEventId(eventId));
         report.setApprovedParticipants((int) registrationRepository.countByEventIdAndStatus(eventId, RegistrationStatus.APPROVED));
         report.setTotalPosts((int) postRepository.countByEventId(eventId));
@@ -52,7 +51,6 @@ public class ReportService {
         return report;
     }
 
-    // java
     public File exportParticipants(Long eventId) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
@@ -66,7 +64,6 @@ public class ReportService {
         try {
             Sheet sheet = workbook.createSheet("Participants");
 
-            // Styles
             Font titleFont = workbook.createFont();
             titleFont.setBold(true);
             titleFont.setFontHeightInPoints((short) 16);
@@ -115,19 +112,15 @@ public class ReportService {
             titleCell.setCellValue("Danh sách thành viên - " + (event.getTitle() == null ? "" : event.getTitle()));
             titleStyle.setAlignment(HorizontalAlignment.CENTER);
             titleCell.setCellStyle(titleStyle);
-            // merge title across all header columns (set after headers determined below)
 
-            // Event meta row
             Row metaRow = sheet.createRow(rowIdx++);
             metaRow.createCell(0).setCellValue("Địa điểm: " + (event.getLocation() == null ? "" : event.getLocation()));
             metaRow.createCell(2).setCellValue("Thời gian: " + (event.getStartDate() == null ? "" : event.getStartDate().toString()));
             metaRow.getCell(0).setCellStyle(subStyle);
             metaRow.getCell(2).setCellStyle(subStyle);
 
-            // Empty spacer
             rowIdx++;
 
-            // Header
             Row header = sheet.createRow(rowIdx++);
             String[] headers = new String[] {
                     "STT", "Họ và tên", "Email", "Số điện thoại", "Ngày đăng ký",
@@ -139,12 +132,9 @@ public class ReportService {
                 c.setCellStyle(headerStyle);
             }
 
-            // Now that headers exist, merge title across header width
             sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, headers.length - 1));
-            // enable autofilter on header row
             sheet.setAutoFilter(new CellRangeAddress(header.getRowNum(), header.getRowNum(), 0, headers.length - 1));
 
-            // Data cell styles (borders, alignment)
             CellStyle dataStyle = workbook.createCellStyle();
             dataStyle.setBorderTop(BorderStyle.THIN);
             dataStyle.setBorderBottom(BorderStyle.THIN);
@@ -158,14 +148,12 @@ public class ReportService {
             zebraStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
             zebraStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
-            // ensure dateStyle has borders and vertical alignment
             dateStyle.setBorderTop(BorderStyle.THIN);
             dateStyle.setBorderBottom(BorderStyle.THIN);
             dateStyle.setBorderLeft(BorderStyle.THIN);
             dateStyle.setBorderRight(BorderStyle.THIN);
             dateStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
-            // Content rows with zebra striping
             int idx = 1;
             for (EventRegistration r : registrations) {
                 Row row = sheet.createRow(rowIdx++);
@@ -200,7 +188,6 @@ public class ReportService {
                 c5.setCellValue(r.getStatus() == null ? "" : r.getStatus().name());
                 c5.setCellStyle(odd ? zebraStyle : dataStyle);
 
-                // certificate URL (if any) - leave empty for now
                 Cell certCell = row.createCell(6);
                 certCell.setCellValue("");
                 certCell.setCellStyle(odd ? zebraStyle : dataStyle);
@@ -228,27 +215,22 @@ public class ReportService {
                 idx++;
             }
 
-            // Freeze header row (title/meta rows above header -> freeze at header.getRowNum()+1)
             sheet.createFreezePane(0, header.getRowNum() + 1);
 
-            // Adjust column widths (sensible defaults)
             int[] widths = new int[] { 6, 30, 28, 16, 20, 14, 40, 14, 40, 20, 30, 40 };
             for (int i = 0; i < widths.length; i++) {
                 sheet.setColumnWidth(i, widths[i] * 256);
             }
 
-            // Auto-size some important columns for neatness
             sheet.autoSizeColumn(1);
             sheet.autoSizeColumn(2);
             sheet.autoSizeColumn(6);
 
-            // Print setup: fit to width, landscape for readability
             sheet.getPrintSetup().setLandscape(true);
             sheet.setFitToPage(true);
             sheet.getPrintSetup().setFitWidth((short) 1);
             sheet.getPrintSetup().setFitHeight((short) 0);
 
-            // create temp file
             File tmp = File.createTempFile("participants_event_" + eventId + "_", ".xlsx");
             try (FileOutputStream fos = new FileOutputStream(tmp)) {
                 workbook.write(fos);

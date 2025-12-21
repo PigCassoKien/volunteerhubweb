@@ -81,23 +81,16 @@ public class UserService {
         return modelMapper.map(user, UserResponseDTO.class);
     }
 
-    /**
-     * Public profile view accessible without authentication.
-     * Returns a `UserResponseDTO` mapped from entity. If you want to hide
-     * sensitive fields for anonymous callers, filter them here.
-     */
+
     public UserResponseDTO getPublicProfileById(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         UserResponseDTO dto = modelMapper.map(user, UserResponseDTO.class);
-        // Optionally remove or mask sensitive info for anonymous viewers.
-        // For now we return public fields as-is; adjust if needed.
         return dto;
     }
 
     public String uploadAvatar(Long id, org.springframework.web.multipart.MultipartFile avatar, String currentUserEmail) {
         User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
-        // Only allow owner or admin to upload
         if (!user.getEmail().equals(currentUserEmail) && !isAdmin(currentUserEmail)) {
             throw new org.springframework.security.access.AccessDeniedException("Forbidden");
         }
@@ -136,7 +129,6 @@ public class UserService {
     }
 
     public List<UserResponseDTO> getAllUsers(String currentUserEmail) {
-        // ensure caller is admin
         User caller = userRepository.findByEmail(currentUserEmail)
                 .orElseThrow(() -> new RuntimeException("Caller not found"));
         if (caller.getRole() != UserRole.ADMIN) {
@@ -159,11 +151,9 @@ public class UserService {
                 if (uid != null) countsMap.put(uid.longValue(), cnt != null ? cnt.intValue() : 0);
             }
         } catch (Exception ex) {
-            // ignore and leave countsMap empty
         }
 
         try {
-            // Compute hours per user with daily cap (max 8 hours per calendar day).
             for (Long uid : userIds) {
                 java.util.List<com.example.volunteerhub.entity.EventRegistration> regs = eventRegistrationRepository.findByUserId(uid);
                 if (regs == null || regs.isEmpty()) {
@@ -201,7 +191,6 @@ public class UserService {
                 hoursMap.put(uid, (int) Math.floor(total));
             }
         } catch (Exception ex) {
-            // fallback to SQL summation if complex logic fails
             try {
                 java.util.List<Object[]> hrs = eventRegistrationRepository.findHoursSumByUserIds(userIds);
                 for (Object[] r : hrs) {
@@ -210,7 +199,6 @@ public class UserService {
                     if (uid != null) hoursMap.put(uid.longValue(), h != null ? h.intValue() : 0);
                 }
             } catch (Exception ex2) {
-                // ignore
             }
         }
 
@@ -261,7 +249,6 @@ public class UserService {
         User target = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new RuntimeException("Target user not found"));
 
-        // do not allow demoting last admin (simple safeguard)
         if (target.getRole() == com.example.volunteerhub.entity.enums.UserRole.ADMIN
                 && request.getRole() != com.example.volunteerhub.entity.enums.UserRole.ADMIN) {
             long adminCount = userRepository.findAll().stream()
@@ -349,7 +336,6 @@ public class UserService {
         List<User> expiredUsers = userRepository.findByVerificationStatusAndCreatedAtBefore(
                 VerificationStatus.UNVERIFIED, threshold
         );
-        // Also delete related entities if needed (implement cascade or manual deletion)
         userRepository.deleteAll(expiredUsers);
     }
 
@@ -360,11 +346,9 @@ public class UserService {
             result = userRepository.searchVolunteers(keyword.trim(), UserRole.VOLUNTEER, pageable);
         } else {
             result = userRepository.findAll(pageable).map(u -> u).map(u -> u); // placeholder, will filter by role below
-            // there is no direct repository.findByRole with pageable defined, so fallback to findAll and filter
             result = result.map(user -> user);
         }
 
-        // Build events/ hours maps for users in page
         java.util.List<User> usersOnPage = result.getContent();
         java.util.List<Long> userIds = usersOnPage.stream().map(User::getId).toList();
 
@@ -379,11 +363,9 @@ public class UserService {
                     if (uid != null) countsMap.put(uid.longValue(), cnt != null ? cnt.intValue() : 0);
                 }
             } catch (Exception ex) {
-                // ignore and leave countsMap empty
             }
 
             try {
-                // Compute hours per user with daily cap (max 8 hours per calendar day).
                 for (Long uid : userIds) {
                     java.util.List<com.example.volunteerhub.entity.EventRegistration> regs = eventRegistrationRepository.findByUserId(uid);
                     if (regs == null || regs.isEmpty()) {
@@ -421,7 +403,6 @@ public class UserService {
                     hoursMap.put(uid, (int) Math.floor(total));
                 }
             } catch (Exception ex) {
-                // fallback to existing sql query when something unexpected happens
                 try {
                     java.util.List<Object[]> hrs = eventRegistrationRepository.findHoursSumByUserIds(userIds);
                     for (Object[] r : hrs) {
@@ -467,7 +448,6 @@ public class UserService {
         java.util.List<com.example.volunteerhub.entity.enums.RegistrationStatus> statuses = java.util.Arrays.asList(com.example.volunteerhub.entity.enums.RegistrationStatus.APPROVED, com.example.volunteerhub.entity.enums.RegistrationStatus.COMPLETED);
         java.util.List<Object[]> rows = eventRegistrationRepository.findTopVolunteersByRegistrationCounts(statuses, pageable);
         java.util.List<com.example.volunteerhub.dto.VolunteerRankDTO> out = new java.util.ArrayList<>();
-        // gather userIds to compute hours in batch
         java.util.List<Long> userIds = new java.util.ArrayList<>();
         for (Object[] row : rows) {
             Number userIdNum = (Number) row[0];
@@ -491,7 +471,6 @@ public class UserService {
             if (userId != null) userIds.add(userId);
         }
 
-        // compute hours for each user (apply 8-hour daily cap)
         java.util.Map<Long, Integer> hoursMap = new java.util.HashMap<>();
         try {
             for (Long uid : userIds) {
@@ -531,7 +510,6 @@ public class UserService {
                 hoursMap.put(uid, (int) Math.floor(total));
             }
         } catch (Exception ex) {
-            // fallback: try SQL aggregation
             try {
                 java.util.List<Object[]> hrs = eventRegistrationRepository.findHoursSumByUserIds(userIds);
                 for (Object[] r : hrs) {
@@ -544,7 +522,6 @@ public class UserService {
             }
         }
 
-        // attach hours to output dtos
         for (com.example.volunteerhub.dto.VolunteerRankDTO dto : out) {
             Long uid = dto.getUserId();
             dto.setHours(hoursMap.getOrDefault(uid, 0));

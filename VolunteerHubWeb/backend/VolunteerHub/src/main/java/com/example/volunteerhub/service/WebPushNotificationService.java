@@ -83,7 +83,6 @@ public class WebPushNotificationService {
                 + " auth_len=" + subscription.getAuthKey().length()
                 + " payload=" + payload + " ttl=" + ttl);
 
-        // Build Notification
         PublicKey userPublicKey = Utils.loadPublicKey(subscription.getPublicKey());
         byte[] userAuth = Base64.getUrlDecoder().decode(subscription.getAuthKey());
         byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
@@ -91,7 +90,6 @@ public class WebPushNotificationService {
         Notification notification = new Notification(subscription.getEndpoint(), userPublicKey, userAuth, payloadBytes, ttl);
 
         PushService pushService = new PushService();
-        // set VAPID keys
         pushService.setPublicKey(Utils.loadPublicKey(publicKey));
         pushService.setPrivateKey(Utils.loadPrivateKey(privateKey));
         pushService.setSubject(subject);
@@ -101,7 +99,6 @@ public class WebPushNotificationService {
             System.out.println("[WebPush] sent -> endpoint=" + subscription.getEndpoint());
         } catch (Exception ex) {
             System.err.println("[WebPush] send FAILED -> endpoint=" + subscription.getEndpoint() + " : " + ex.getMessage());
-            // if the endpoint is gone (410) remove subscription to avoid repeated errors
             String msg = ex.getMessage() == null ? "" : ex.getMessage();
             if (msg.contains("410") || msg.toLowerCase().contains("gone") || msg.toLowerCase().contains("not found")) {
                 try {

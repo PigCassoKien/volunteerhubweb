@@ -26,7 +26,7 @@ public class Comment {
 
     @ManyToOne
     @JoinColumn(name = "parent_comment_id")
-    private Comment parentComment; // For nested comments
+    private Comment parentComment;
 
     private String content;
     private LocalDateTime createdAt;

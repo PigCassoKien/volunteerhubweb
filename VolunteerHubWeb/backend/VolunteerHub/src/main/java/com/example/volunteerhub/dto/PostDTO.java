@@ -11,13 +11,12 @@ public class PostDTO {
     private Long id;
     private Long eventId;
     private Long userId;
-    private String userFullName; // <- added
+    private String userFullName;
     private String content;
     private List<String> mediaFiles;
     private PostStatus status;
     private LocalDateTime createdAt;
 
-    // Title of the event this post belongs to (for dashboard / listing)
     private String eventTitle;
 
     // Filename of user's avatar (stored on server). Frontend expects `userAvatar` or `userAvatarFile`.

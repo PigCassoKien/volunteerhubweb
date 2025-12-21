@@ -36,7 +36,6 @@ public class PushSubscriptionController {
         String endpoint = subscriptionDTO.getEndpoint();
         if (endpoint == null || endpoint.isBlank()) return ResponseEntity.badRequest().build();
 
-        // find all matching endpoints (dedupe)
         List<PushSubscription> matches = subscriptionRepository.findByEndpoint(endpoint);
         if (matches == null || matches.isEmpty()) {
             PushSubscription s = new PushSubscription();
@@ -47,7 +46,6 @@ public class PushSubscriptionController {
             subscriptionRepository.save(s);
             System.out.println("[PushSub] saved new subscription endpoint=" + endpoint + " user=" + email);
         } else {
-            // keep earliest id as canonical, update it and remove duplicates
             matches.sort((a, b) -> a.getId().compareTo(b.getId()));
             PushSubscription canonical = matches.get(0);
 
@@ -74,7 +72,6 @@ public class PushSubscriptionController {
                 System.out.println("[PushSub] canonical exists id=" + canonical.getId() + " endpoint=" + endpoint + " user=" + email);
             }
 
-            // remove other duplicate rows (if any)
             for (int i = 1; i < matches.size(); i++) {
                 PushSubscription dup = matches.get(i);
                 try {

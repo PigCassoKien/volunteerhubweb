@@ -21,7 +21,7 @@ public class AppConfig implements WebMvcConfigurer {
     }
 
     @Value("${upload.dir:uploads}")
-    private String uploadDir; // use configured upload.dir (relative by default)
+    private String uploadDir;
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
@@ -32,7 +32,6 @@ public class AppConfig implements WebMvcConfigurer {
         System.out.println("[AppConfig] serving /uploads/** from -> " + resourceLocation);
     }
 
-    // Use Jackson2ObjectMapperBuilderCustomizer to register JavaTimeModule and keep Spring Boot defaults
     @Bean
     public Jackson2ObjectMapperBuilderCustomizer jacksonCustomizer() {
         return builder -> {

@@ -61,10 +61,8 @@ public class PostController {
                     Path target = baseDir.resolve(filename);
                     Files.copy(f.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
 
-                    // debug log
                     System.out.println("[PostController] saved -> " + target.toAbsolutePath());
 
-                    // store relative path used by frontend: "post/filename"
                     savedNames.add("post/" + filename);
                 }
             }
@@ -135,7 +133,6 @@ public class PostController {
         return ResponseEntity.ok(dto);
     }
 
-    // New: delete one media from a post (called by controller)
     @DeleteMapping("/{postId}/media")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PostDTO> deletePostMedia(

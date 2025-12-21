@@ -64,7 +64,6 @@ public class EventRegistrationService {
             throw new RuntimeException("Không thể đăng ký sự kiện chưa được duyệt");
         }
 
-        // Prevent registering if event already started or is ongoing/ended
         if (event.getStartDate() != null && LocalDateTime.now().isAfter(event.getStartDate())) {
             throw new RuntimeException("Không thể đăng ký sau khi sự kiện đã bắt đầu");
         }
@@ -72,7 +71,6 @@ public class EventRegistrationService {
             throw new RuntimeException("Không thể đăng ký sự kiện đã kết thúc");
         }
 
-        // parse dateOfBirth (frontend should send "yyyy-MM-dd")
         LocalDate dob = null;
         try {
             if (request.getDateOfBirth() != null && !request.getDateOfBirth().isBlank()) {
@@ -82,7 +80,6 @@ public class EventRegistrationService {
             throw new RuntimeException("dateOfBirth không hợp lệ. Định dạng yêu cầu: yyyy-MM-dd");
         }
 
-        // minimal server-side validation (extra safety)
         if (request.getFullName() == null || request.getFullName().isBlank()) throw new RuntimeException("Họ tên là bắt buộc");
         if (request.getPhone() == null || request.getPhone().isBlank()) throw new RuntimeException("Số điện thoại là bắt buộc");
         if (request.getEmail() == null || request.getEmail().isBlank()) throw new RuntimeException("Email là bắt buộc");
@@ -95,7 +92,6 @@ public class EventRegistrationService {
         registration.setStatus(RegistrationStatus.PENDING);
         registration.setRegisteredAt(LocalDateTime.now());
 
-        // map form fields
         registration.setFullName(request.getFullName());
         registration.setGender(request.getGender());
         registration.setDateOfBirth(dob);
@@ -123,12 +119,10 @@ public class EventRegistrationService {
         EventRegistration registration = registrationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Registration not found"));
 
-        // If requester is the registered user -> allow
         if (registration.getUser() != null && email.equals(registration.getUser().getEmail())) {
             return modelMapper.map(registration, EventRegistrationDTO.class);
         }
 
-        // Otherwise must be event manager who created the event
         User manager = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         if (manager.getRole() != UserRole.EVENT_MANAGER) {
@@ -144,15 +138,12 @@ public class EventRegistrationService {
     }
 
 
-    // Read registrations for an event (manager/admin only) and expose full form fields
     public List<EventRegistrationDTO> getRegistrationsByEvent(Long eventId, String requesterEmail) {
-        // load event + requester
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
         User requester = userRepository.findByEmail(requesterEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // allow if requester is event manager (owner) or admin
         boolean isManager = requester.getRole() == UserRole.EVENT_MANAGER
                 && event.getCreatedBy() != null
                 && event.getCreatedBy().getId().equals(requester.getId());
@@ -178,7 +169,6 @@ public class EventRegistrationService {
                 dto.setCertificateUrl(null);
             }
 
-            // full volunteer form fields
             dto.setFullName(r.getFullName());
             dto.setGender(r.getGender());
             dto.setDateOfBirth(r.getDateOfBirth());
@@ -192,7 +182,6 @@ public class EventRegistrationService {
             dto.setSkills(r.getSkills());
             dto.setConfirmation(r.getConfirmation());
 
-            // helpful event info
             dto.setEventTitle(r.getEvent() != null ? r.getEvent().getTitle() : null);
             dto.setEventStartDate(r.getEvent() != null ? r.getEvent().getStartDate() : null);
             dto.setEventLocation(r.getEvent() != null ? r.getEvent().getLocation() : null);
@@ -216,7 +205,6 @@ public class EventRegistrationService {
                 request != null ? request.getCategoryId() : null
         );
 
-        // Map and attach event metadata for frontend
         return regs.stream().map(reg -> {
             EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
             dto.setId(reg.getId());
@@ -232,7 +220,6 @@ public class EventRegistrationService {
                 dto.setEventLocation(reg.getEvent().getLocation());
             }
 
-            // copy some profile/registration fields so UI can show role/notes
             dto.setFullName(reg.getFullName());
             dto.setPhone(reg.getPhone());
             dto.setExperience(reg.getExperience());
@@ -252,7 +239,6 @@ public class EventRegistrationService {
         }).collect(Collectors.toList());
     }
 
-    // Public: fetch registrations for a given user id (used to display another user's activity)
     public List<EventRegistrationDTO> getRegistrationsByUserId(Long userId) {
         List<EventRegistration> regs = registrationRepository.findByUserId(userId);
         if (regs == null) return new ArrayList<>();
@@ -298,7 +284,6 @@ public class EventRegistrationService {
         reg.setUpdatedAt(LocalDateTime.now());
         registrationRepository.save(reg);
 
-        // NEW: notify user
         notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.APPROVED);
 
         return modelMapper.map(reg, EventRegistrationDTO.class);
@@ -310,14 +295,10 @@ public class EventRegistrationService {
         reg.setCompletedAt(LocalDateTime.now());
         registrationRepository.save(reg);
 
-        // NEW: notify user
         notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.COMPLETED);
-        // generate certificate file (best-effort)
         try {
             String path = generateCertificate(reg);
-            // path is like ./Uploads/certificates/{id}_certificate.pdf
         } catch (Exception ex) {
-            // ignore generation errors
         }
 
         EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
@@ -327,11 +308,9 @@ public class EventRegistrationService {
         return dto;
     }
 
-    // Public wrapper so controllers or other callers can request generation on-demand
     public String generateCertificateForRegistration(Long registrationId, String requesterEmail) {
         EventRegistration reg = registrationRepository.findById(registrationId).orElseThrow(() -> new RuntimeException("Registration not found"));
 
-        // Allow if requester is registrant, event manager (owner) or admin
         boolean isOwner = reg.getUser() != null && reg.getUser().getEmail() != null && reg.getUser().getEmail().equals(requesterEmail);
         boolean isManager = false;
         boolean isAdmin = false;
@@ -361,7 +340,6 @@ public class EventRegistrationService {
     public EventRegistrationDTO cancelRegistration(Long registrationId, String email, String reason) {
         EventRegistration reg = registrationRepository.findById(registrationId).orElseThrow(() -> new RuntimeException("Registration not found"));
         Event event = reg.getEvent();
-        // requester could be the registrant (owner) or a manager/admin
         User requester = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
 
         boolean isOwner = reg.getUser() != null && reg.getUser().getEmail().equals(email);
@@ -369,7 +347,6 @@ public class EventRegistrationService {
         boolean isAdmin = requester.getRole() != null && requester.getRole().toString().contains("ADMIN");
 
         if (isOwner) {
-            // volunteers can only cancel before event start
             if (event.getStartDate() != null && LocalDateTime.now().isAfter(event.getStartDate())) {
                 throw new RuntimeException("Không thể huỷ đăng ký sau khi sự kiện đã bắt đầu");
             }
@@ -389,7 +366,6 @@ public class EventRegistrationService {
 
         registrationRepository.save(reg);
 
-        // notify the original registrant about cancellation
         notificationService.notifyRegistrationStatusChange(reg.getUser().getId(), reg.getEvent().getId(), RegistrationStatus.CANCELED);
 
         EventRegistrationDTO dto = modelMapper.map(reg, EventRegistrationDTO.class);
@@ -399,7 +375,6 @@ public class EventRegistrationService {
         return dto;
     }
 
-    // Mark all approved registrations as COMPLETED if event already ended
     public void completeRegistrationsForEvent(Long eventId, String requesterEmail) {
         Event event = eventRepository.findById(eventId).orElseThrow(() -> new RuntimeException("Event not found"));
         User requester = userRepository.findByEmail(requesterEmail).orElseThrow(() -> new RuntimeException("User not found"));
@@ -417,11 +392,9 @@ public class EventRegistrationService {
                 r.setStatus(RegistrationStatus.COMPLETED);
                 r.setCompletedAt(LocalDateTime.now());
                 registrationRepository.save(r);
-                // notify user
                 try {
                     notificationService.notifyRegistrationStatusChange(r.getUser().getId(), eventId, RegistrationStatus.COMPLETED);
                 } catch (Exception ex) {
-                    // continue on errors
                 }
             }
         }
@@ -445,7 +418,6 @@ public class EventRegistrationService {
             File file = new File(dest);
             file.getParentFile().mkdirs();
 
-            // try to find a TTF font that supports UTF-8 (Vietnamese)
             String fontPath = null;
             String[] candidates = new String[]{
                     "src/main/resources/fonts/DejaVuSans.ttf",
@@ -471,18 +443,15 @@ public class EventRegistrationService {
             if (fontPath != null) {
                 font = PdfFontFactory.createFont(fontPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
             } else {
-                // fallback (may not support full UTF-8 glyphs)
                 font = PdfFontFactory.createFont(StandardFonts.HELVETICA);
             }
 
             document.setFont(font);
 
-            // Decorative container with light border
             Div box = new Div();
             box.setBorder(new SolidBorder(new DeviceRgb(200, 200, 200), 1));
             box.setPadding(20);
 
-            // Title
             Paragraph title = new Paragraph("GIẤY CHỨNG NHẬN")
                     .setFontSize(28)
                     .setBold()
@@ -491,7 +460,6 @@ public class EventRegistrationService {
 
             box.add(new Paragraph(" ")); // spacer
 
-            // Recipient
             String fullName = registration.getFullName() != null && !registration.getFullName().isBlank()
                     ? registration.getFullName()
                     : (registration.getUser() != null ? registration.getUser().getFullName() : "");
@@ -503,7 +471,6 @@ public class EventRegistrationService {
 
             box.add(new Paragraph(" "));
 
-            // Body
             String eventTitle = registration.getEvent() != null ? registration.getEvent().getTitle() : "";
             Paragraph body = new Paragraph()
                     .add("Đã hoàn thành tham gia sự kiện: ")
@@ -514,7 +481,6 @@ public class EventRegistrationService {
 
             box.add(new Paragraph(" "));
 
-            // Date
             String date = registration.getCompletedAt() != null ? registration.getCompletedAt().toLocalDate().toString() : "";
             Paragraph dateP = new Paragraph("Ngày: " + date)
                     .setFontSize(12)
@@ -523,7 +489,6 @@ public class EventRegistrationService {
 
             box.add(new Paragraph(" "));
 
-            // Signature placeholder
             Paragraph sig = new Paragraph("Ban tổ chức")
                     .setFontSize(14)
                     .setTextAlignment(TextAlignment.RIGHT);

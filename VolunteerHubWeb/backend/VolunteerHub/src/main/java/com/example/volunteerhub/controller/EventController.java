@@ -43,11 +43,9 @@ public class EventController {
     @Value("${upload.dir:uploads}")
     private String uploadDir;
 
-    // optional per-project override for event uploads; if set absolute or relative it's resolved
     @Value("${event.upload.dir:}")
     private String eventUploadDir;
 
-    // Multipart create: accepts one image file (imageFile)
     @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Create a new event (with optional image)")
     @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN')")
@@ -65,25 +63,21 @@ public class EventController {
         try {
             System.out.println("[EventController] createEventMultipart received: title=" + title + ", startDate=" + startDate + ", endDate=" + endDate + ", categoryId=" + categoryId);
 
-            // Parse start/end into LocalDateTime with tolerant parsing
             LocalDateTime startDt = parseToLocalDateTime(startDate);
             LocalDateTime endDt = parseToLocalDateTime(endDate);
             if (startDt == null || endDt == null) {
                 throw new RuntimeException("Không thể đọc ngày bắt đầu/ket thúc. Định dạng hợp lệ: yyyy-MM-dd'T'HH:mm[:ss] hoặc ISO_OFFSET_DATE_TIME.");
             }
 
-            // build DTO to pass to service (reuse EventDTO)
             EventDTO dto = new EventDTO();
             dto.setTitle(title);
             dto.setDescription(description);
             dto.setLocation(location);
-            // parse startDate / endDate using same helper as other endpoints (expecting ISO datetime)
             dto.setStartDate(LocalDateTime.parse(startDate));
             dto.setEndDate(LocalDateTime.parse(endDate));
             dto.setCategory(categoryId == null ? null : new Category() {{ setId(categoryId); }});
             dto.setMaxParticipants(maxParticipants);
 
-            // handle image save similar to previous impl (store file -> dto.setImageFile(...))
             if (imageFile != null && !imageFile.isEmpty()) {
                 Path dest = Path.of(uploadDir).toAbsolutePath().resolve("events");
                 Files.createDirectories(dest);
@@ -101,7 +95,6 @@ public class EventController {
         } catch (DateTimeParseException dtp) {
             throw new RuntimeException("Ngày không hợp lệ: " + dtp.getMessage());
         } catch (RuntimeException re) {
-            // propagate with message for frontend
             throw re;
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -109,7 +102,6 @@ public class EventController {
         }
     }
 
-    // Multipart update (allows replacing/adding image)
     @PutMapping(value = "/update/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER','ROLE_ADMIN')")
     public ResponseEntity<EventDTO> updateEventMultipart(
@@ -194,7 +186,6 @@ public class EventController {
         return ResponseEntity.ok(eventService.getEventsByCategory(categoryId));
     }
 
-    // java
     @GetMapping("/date-range")
     @Operation(summary = "Get events by date range", responses = {
             @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json", schema = @Schema(implementation = EventDTO.class))),

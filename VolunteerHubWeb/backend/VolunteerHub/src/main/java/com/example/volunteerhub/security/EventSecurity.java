@@ -15,7 +15,6 @@ public class EventSecurity {
     public boolean canAccessEvent(Long eventId, Authentication authentication) {
         if (authentication == null || eventId == null) return false;
 
-        // allow admins and event managers
         for (GrantedAuthority ga : authentication.getAuthorities()) {
             String role = ga.getAuthority();
             if ("ROLE_ADMIN".equals(role) || "ROLE_EVENT_MANAGER".equals(role) || "ROLE_SUPER_ADMIN".equals(role)) {
@@ -23,7 +22,6 @@ public class EventSecurity {
             }
         }
 
-        // fallback: allow if authenticated user is registered for the event
         String email = authentication.getName();
         return registrationService.isUserRegistered(eventId, email); // implement this in EventRegistrationService if missing
     }

@@ -6,6 +6,9 @@ This repository contains VolunteerHub — a community volunteering web applicati
 ## Getting Started
 **Prerequisites**
 - Java 17+ and Maven
+## Database Relationship
+
+![alt text](image.png)
 
 ## Database Setup
 

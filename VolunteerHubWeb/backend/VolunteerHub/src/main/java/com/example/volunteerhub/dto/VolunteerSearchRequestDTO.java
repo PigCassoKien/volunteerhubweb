@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Data
 public class VolunteerSearchRequestDTO {
-    private String keyword; // Từ khóa tìm kiếm (email, fullName)
-    private RegistrationStatus status; // Lọc theo trạng thái đăng ký sự kiện
-    private Long eventId; // Lọc theo sự kiện
+    private String keyword;
+    private RegistrationStatus status;
+    private Long eventId;
 }

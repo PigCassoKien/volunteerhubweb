@@ -48,17 +48,14 @@ public class DashboardService {
     @Autowired
     private ModelMapper modelMapper;
 
-    // Public dashboard (anyone can view)
     public DashboardDTO getDashboardStats() {
         return buildDashboard(LocalDateTime.now().minusDays(7), null, null, null);
     }
 
-    // Public dashboard by date range
     public DashboardDTO getDashboardStatsByDateRange(LocalDateTime start, LocalDateTime end) {
         return buildDashboard(null, start, end, null);
     }
 
-    // Authenticated-aware dashboard: pass requester's email (may be null)
     public DashboardDTO getDashboardStats(String requesterEmail) {
         return buildDashboard(LocalDateTime.now().minusDays(7), null, null, requesterEmail);
     }
@@ -67,30 +64,25 @@ public class DashboardService {
         return buildDashboard(null, start, end, requesterEmail);
     }
 
-    // Internal builder: if last7Days != null use it for "new" filter, otherwise use start/end when provided
     private DashboardDTO buildDashboard(LocalDateTime last7Days, LocalDateTime start, LocalDateTime end, String requesterEmail) {
         DashboardDTO dashboard = new DashboardDTO();
 
-        // New events: either last7Days or between start/end
         List<Event> newEvents;
         if (last7Days != null) {
             newEvents = eventRepository.findByCreatedAtAfter(last7Days);
         } else {
             newEvents = eventRepository.findByCreatedAtBetween(start, end);
         }
-        // Sort newest first and map
         dashboard.setNewEvents(newEvents.stream()
                 .sorted(Comparator.comparing(e -> e.getCreatedAt() == null ? LocalDateTime.MIN : e.getCreatedAt(), Comparator.reverseOrder()))
                 .limit(10)
                 .map(event -> modelMapper.map(event, EventDTO.class))
                 .collect(Collectors.toList()));
 
-        // Trending events: compute simple popularity score based on recent registrations and post interactions
         List<Event> approved = eventRepository.findByStatus(EventStatus.APPROVED);
         LocalDateTime recentCut = last7Days != null ? last7Days : (start != null ? start : LocalDateTime.now().minusDays(7));
 
         List<EventDTO> trending = approved.stream().map(ev -> {
-            // registrations in recent window with APPROVED status
             int recentRegs = 0;
             try {
                 recentRegs = (int) registrationRepository.findByEventIdAndStatus(ev.getId(), com.example.volunteerhub.entity.enums.RegistrationStatus.APPROVED)
@@ -99,10 +91,8 @@ public class DashboardService {
                         .count();
             } catch (Exception ignored) { }
 
-            // recent posts interactions (reactions + comments)
             int recentInteractions = 0;
             try {
-                // Only consider APPROVED posts for trending interactions
                 List<Post> posts = postRepository.findByEventIdAndStatus(ev.getId(), PostStatus.APPROVED);
                 for (Post p : posts) {
                     if (p.getCreatedAt() != null && p.getCreatedAt().isAfter(recentCut)) {
@@ -113,14 +103,11 @@ public class DashboardService {
                 }
             } catch (Exception ignored) { }
 
-            // weighted score: registrations heavier than interactions
             int score = recentRegs * 3 + recentInteractions;
             EventDTO dto = modelMapper.map(ev, EventDTO.class);
             try {
                 dto.setRegisteredCount(registrationRepository.countByEventId(ev.getId()));
             } catch (Exception ignored) { }
-            // temporarily store score in description field if needed by client (or add new DTO field later)
-            // but better to reuse DTO.title/description not ideal — keep score outside; for now set description to include score
             dto.setDescription((dto.getDescription() == null ? "" : dto.getDescription()) + "\n__score:" + score);
             return new java.util.AbstractMap.SimpleEntry<>(ev, new java.util.AbstractMap.SimpleEntry<>(score, dto));
         }).sorted((a, b) -> Integer.compare(b.getValue().getKey(), a.getValue().getKey()))
@@ -130,15 +117,12 @@ public class DashboardService {
 
         dashboard.setTrendingEvents(trending);
 
-        // New posts: either last7Days or between start/end
         List<Post> newPosts;
         if (last7Days != null) {
             newPosts = postRepository.findByCreatedAtAfter(last7Days);
         } else {
             newPosts = postRepository.findByCreatedAtBetween(start, end);
         }
-        // only expose APPROVED posts in public dashboard
-        // Determine which event ids the requester is allowed to see posts from
         final java.util.Set<Long> allowedEventIds;
         final boolean allowAllPosts;
         if (requesterEmail == null) {
@@ -151,7 +135,7 @@ public class DashboardService {
                 User requester = userRepository.findByEmail(requesterEmail).orElse(null);
                 if (requester != null) {
                     if (requester.getRole() == UserRole.ADMIN) {
-                        all = true; // admin sees all posts
+                        all = true;
                     } else if (requester.getRole() == UserRole.EVENT_MANAGER) {
                         ids = eventRepository.findByCreatedBy(requester.getId()).stream()
                                 .map(Event::getId)
@@ -174,7 +158,7 @@ public class DashboardService {
                 .filter(p -> p.getStatus() == PostStatus.APPROVED)
                 .filter(p -> {
                     if (allowAllPosts) return true;
-                    if (allowedEventIds == null) return true; // fallback: allow all
+                    if (allowedEventIds == null) return true;
                     return allowedEventIds.contains(p.getEvent().getId());
                 })
                 .sorted(Comparator.comparing(p -> p.getCreatedAt() == null ? LocalDateTime.MIN : p.getCreatedAt(), Comparator.reverseOrder()))
@@ -186,7 +170,6 @@ public class DashboardService {
                 })
                 .collect(Collectors.toList()));
 
-        // Metrics
         long totalEvents = eventRepository.count();
         long totalUsers = userRepository.count();
         long totalVolunteers = userRepository.findByRole(UserRole.VOLUNTEER).size();
@@ -206,7 +189,7 @@ public class DashboardService {
         dashboard.setTotalRegistrations((int) totalRegistrations);
         dashboard.setTotalApprovedRegistrations((int) totalApprovedRegistrations);
         dashboard.setActiveUsersLast7Days(activeLast7);
-        dashboard.setSiteVisits(0L); // placeholder: integrate analytics later
+        dashboard.setSiteVisits(0L);
 
         return dashboard;
     }

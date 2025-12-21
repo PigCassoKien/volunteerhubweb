@@ -66,20 +66,16 @@ public class CommentService {
             comment.setParentComment(parentComment);
         }
 
-        // save before mapping
         comment = commentRepository.save(comment);
 
-        // NEW: notify post owner (if not commenter)
         Long postOwnerId = post.getUser().getId();
         if (!postOwnerId.equals(user.getId())) {
             notificationService.notifyComment(postOwnerId, post.getId(), RelatedType.POST, user.getId());
         }
 
-        // If this is a reply to another comment, also notify the parent comment's owner (if not the same as commenter)
         if (comment.getParentComment() != null && comment.getParentComment().getUser() != null) {
             Long parentOwnerId = comment.getParentComment().getUser().getId();
             if (!parentOwnerId.equals(user.getId())) {
-                // relatedId = parent comment id, relatedType = COMMENT
                 notificationService.notifyComment(parentOwnerId, comment.getParentComment().getId(), RelatedType.COMMENT, user.getId());
             }
         }
@@ -94,7 +90,6 @@ public class CommentService {
         return dto;
     }
 
-    // Read single comment (only participants or manager)
     public CommentDTO getCommentById(Long id, String email) {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Comment not found"));
@@ -131,7 +126,6 @@ public class CommentService {
         }
 
         List<Comment> flat = commentRepository.findByPostId(postId);
-        // map and set canDelete: comment owner OR post owner OR event manager OR admin
         List<CommentDTO> dtos = flat.stream().map(c -> {
             CommentDTO dto = modelMapper.map(c, CommentDTO.class);
             dto.setUserId(c.getUser().getId());
@@ -141,7 +135,7 @@ public class CommentService {
             boolean canDelete = false;
             if (requester != null) {
                 if (c.getUser() != null && c.getUser().getId().equals(requester.getId())) canDelete = true;
-                else if (post.getUser() != null && post.getUser().getId().equals(requester.getId())) canDelete = true; // post owner can delete any comment
+                else if (post.getUser() != null && post.getUser().getId().equals(requester.getId())) canDelete = true;
                 else if (requester.getRole() == UserRole.ADMIN) canDelete = true;
                 else if (requester.getRole() == UserRole.EVENT_MANAGER && post.getEvent().getCreatedBy() != null
                         && post.getEvent().getCreatedBy().getId().equals(requester.getId())) canDelete = true;
@@ -152,7 +146,6 @@ public class CommentService {
         return dtos;
     }
 
-    // Update - only comment owner
     public CommentDTO updateComment(Long id, CommentDTO commentDTO, String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -178,7 +171,6 @@ public class CommentService {
         return dto;
     }
 
-    // Delete comment: only allowed to comment owner OR post owner OR event manager OR admin
     public void deleteComment(Long id, String email) {
         Comment c = commentRepository.findById(id).orElseThrow(() -> new RuntimeException("Comment not found"));
         Post post = c.getPost();

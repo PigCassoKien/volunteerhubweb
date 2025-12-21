@@ -35,7 +35,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/api/users/register",
-                                "/api/notifications/vapid-public-key", // <- allow frontend to fetch VAPID key without auth
+                                "/api/notifications/vapid-public-key",
                                 "/api/otp/verify",
                                 "/api/otp/generate",
                                 "/api/users/reset-password",
@@ -48,8 +48,7 @@ public class SecurityConfig {
                                 "/swagger-ui.html"
                         ).permitAll()
                         
-                        // user endpoints are protected by method-level @PreAuthorize where appropriate
-                        
+
                         .requestMatchers("/api/events/manage/**")
                         .hasAnyRole("EVENT_MANAGER", "ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
@@ -62,7 +61,6 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // ✅ Thêm cấu hình CORS tại đây
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();

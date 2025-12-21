@@ -36,7 +36,6 @@ public class Post {
     @Enumerated(EnumType.STRING)
     private PostStatus status;
 
-    // Đánh dấu bài viết là THÔNG BÁO từ manager
     @Column(nullable = false)
     private boolean announcement = false;
 

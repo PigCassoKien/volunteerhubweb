@@ -7,7 +7,6 @@ import java.util.List;
 
 public interface PushSubscriptionRepository extends JpaRepository<PushSubscription, Long> {
     List<PushSubscription> findAllByUserId(Long userId);
-    // return all matches so controller can dedupe if DB contains duplicates
     List<PushSubscription> findByEndpoint(String endpoint);
     void deleteByEndpoint(String endpoint);
 }

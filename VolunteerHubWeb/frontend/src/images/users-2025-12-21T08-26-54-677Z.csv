@@ -1,0 +1,32 @@
+﻿"Báo cáo xuất dữ liệu - Người dùng"
+"Xuất lúc: 2025-12-21 15:26:54"
+"Tổng bản ghi: 27"
+
+"ID","Họ và tên","Email","Vai trò","Trạng thái","Xác thực","Số điện thoại","Địa chỉ","Số sự kiện","Tổng giờ (giới hạn 8h/ngày)","Ngày tạo","Mô tả ngắn"
+1,"Quản Trị Viên Chính","admin@gmail.com","ADMIN",,"VERIFIED","0123456789","Default Admin Address",0,0,"",
+5,"Dương Minh Kiên","22022217@vnu.edu.vn","ADMIN",,"VERIFIED","0338138386","123 Main St",0,0,"2025-10-15 22:40:17",
+7,"Kinh Dương Miên","kienabc1235@gmail.com","EVENT_MANAGER",,"VERIFIED","0123456789","123 Main St",0,0,"2025-10-18 00:25:43",
+8,"Minh Kiên Dương","kienduong612@gmail.com","VOLUNTEER",,"VERIFIED","0123456789","123 Main St",8,118,"2025-10-18 22:54:56",
+9,"Nếu Ngày Ấy","duongkien12a3@gmail.com","VOLUNTEER",,"VERIFIED","0123456789","123 Main St",4,76,"2025-10-19 00:03:42",
+10,"Trương Đức Hiếu","hieudainhanqt2@gmail.com","VOLUNTEER",,"VERIFIED","0135695616","Quỳnh Lưu",2,64,"2025-12-20 01:30:04",
+11,"Nguyen Van B","user11@example.com","VOLUNTEER",,"VERIFIED","0987654321","Hanoi, Vietnam",2,11,"2026-01-01 17:00:00",
+12,"Tran Thi C","user12@example.com","EVENT_MANAGER",,"VERIFIED","0123456780","Ho Chi Minh City",2,17,"2026-01-02 18:00:00",
+13,"Le Van D","user13@example.com","VOLUNTEER",,"VERIFIED","0981234567","Da Nang",2,73,"2026-01-03 19:00:00",
+14,"Pham Thi E","user14@example.com","VOLUNTEER",,"VERIFIED","0976543210","Hue",2,68,"2026-01-04 20:00:00",
+15,"Hoang Van F","user15@example.com","EVENT_MANAGER",,"VERIFIED","0965432109","Nha Trang",2,74,"2026-01-05 21:00:00",
+16,"Vo Thi G","user16@example.com","VOLUNTEER",,"VERIFIED","0954321098","Can Tho",2,20,"2026-01-06 22:00:00",
+17,"Dang Van H","user17@example.com","VOLUNTEER",,"VERIFIED","0943210987","Vinh",2,49,"2026-01-07 23:00:00",
+18,"Bui Thi I","user18@example.com","EVENT_MANAGER",,"VERIFIED","0932109876","Quang Ninh",2,64,"2026-01-09 00:00:00",
+19,"Ngo Van J","user19@example.com","VOLUNTEER",,"VERIFIED","0921098765","Bac Ninh",2,32,"2026-01-10 01:00:00",
+20,"Do Thi K","user20@example.com","VOLUNTEER",,"VERIFIED","0910987654","Thai Nguyen",2,28,"2026-01-11 02:00:00",
+21,"Vu Van L","user21@example.com","VOLUNTEER",,"VERIFIED","0909876543","Hai Phong, Vietnam",2,16,"2026-02-01 17:00:00",
+22,"Ly Thi M","user22@example.com","EVENT_MANAGER",,"VERIFIED","0898765432","Binh Duong",2,17,"2026-02-02 18:00:00",
+23,"Trinh Van N","user23@example.com","VOLUNTEER",,"VERIFIED","0887654321","Dong Nai",2,12,"2026-02-03 19:00:00",
+24,"Dao Thi O","user24@example.com","VOLUNTEER",,"VERIFIED","0876543210","Long An",2,75,"2026-02-04 20:00:00",
+25,"Kieu Van P","user25@example.com","EVENT_MANAGER",,"VERIFIED","0865432109","Tien Giang",2,69,"2026-02-05 21:00:00",
+26,"Ha Thi Q","user26@example.com","VOLUNTEER",,"VERIFIED","0854321098","Ben Tre",2,74,"2026-02-06 22:00:00",
+27,"Chu Van R","user27@example.com","VOLUNTEER",,"VERIFIED","0843210987","Vung Tau",2,22,"2026-02-07 23:00:00",
+28,"Dinh Thi S","user28@example.com","EVENT_MANAGER",,"VERIFIED","0832109876","Lam Dong",2,35,"2026-02-09 00:00:00",
+29,"Giang Van T","user29@example.com","VOLUNTEER",,"VERIFIED","0821098765","Khanh Hoa",2,64,"2026-02-10 01:00:00",
+30,"Huynh Thi U","user30@example.com","VOLUNTEER",,"VERIFIED","0810987654","Phu Yen",2,32,"2026-02-11 02:00:00",
+31,"Nguyễn Đức Kiên","ngdlong1809@gmail.com","VOLUNTEER",,"VERIFIED","0365896357","Mỹ đình, Hà nội",1,64,"2025-12-21 15:07:39",

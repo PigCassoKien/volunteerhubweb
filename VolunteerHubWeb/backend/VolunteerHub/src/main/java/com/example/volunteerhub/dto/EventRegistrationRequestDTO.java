@@ -10,9 +10,8 @@ public class EventRegistrationRequestDTO {
     @NotBlank
     private String fullName;
     @NotBlank
-    private String gender; // "Male", "Female", "Other", etc.
+    private String gender;
 
-    // Accept as String from frontend (yyyy-MM-dd) and parse server-side for robust error handling
     @NotBlank
     private String dateOfBirth;
 
@@ -21,7 +20,7 @@ public class EventRegistrationRequestDTO {
     @NotBlank
     private String occupation;
     @NotBlank
-    private String about; // description / self-intro
+    private String about;
 
     @NotBlank
     private String phone;
@@ -30,12 +29,11 @@ public class EventRegistrationRequestDTO {
     @Email
     private String email;
 
-    // optional for students
     private String school;
 
-    private String experience; // free text
-    private String skills; // comma separated or free text
+    private String experience;
+    private String skills;
 
     @NotNull
-    private Boolean confirmation; // Xác nhận và cam kết
+    private Boolean confirmation;
 }

@@ -17,7 +17,6 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     @Query("SELECT e FROM Event e WHERE e.createdBy.id = :userId")
     List<Event> findByCreatedBy(Long userId);
     List<Event> findByCreatedAtAfter(LocalDateTime createdAt);
-    // Java
     List<Event> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
 
     List<Event> findByStatusAndCreatedAtBetween(EventStatus status, LocalDateTime start, LocalDateTime end);

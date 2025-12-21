@@ -41,7 +41,6 @@ public class NotificationService {
     @Autowired
     private WebPushNotificationService webPushNotificationService; // <- ensure available
 
-    // Send custom notification (manager -> all APPROVED registrants of event)
     public void sendCustomNotification(CustomNotificationRequestDTO request, String senderEmail) {
         if (request.getEventId() == null || request.getContent() == null || request.getContent().isBlank()) {
             throw new RuntimeException("Missing eventId or content");
@@ -54,14 +53,12 @@ public class NotificationService {
         String body = request.getContent();
         String url = "/events/" + event.getId();
 
-        // lấy tất cả người đã APPROVED cho event
         List<EventRegistration> regs = registrationRepository.findByEventIdAndStatus(event.getId(), RegistrationStatus.APPROVED);
         List<Long> recipientUserIds = regs.stream()
                 .map(r -> r.getUser().getId())
                 .distinct()
                 .collect(Collectors.toList());
 
-        // gửi tới từng người nhận: lưu Notification + gửi webpush
         for (Long uid : recipientUserIds) {
             try {
                 Notification notif = new Notification();
@@ -74,7 +71,6 @@ public class NotificationService {
                 notif.setRelatedType(RelatedType.EVENT);
                 notificationRepository.save(notif);
             } catch (Exception e) {
-                // ignore persistence error per recipient
             }
             try {
                 webPushNotificationService.sendNotificationToUser(uid, title, body, url);
@@ -83,7 +79,6 @@ public class NotificationService {
             }
         }
 
-        // nếu yêu cầu, gửi thêm tới người gửi (preview)
         if (Boolean.TRUE.equals(request.getIncludeSender())) {
             User sender = userRepository.findByEmail(senderEmail).orElse(null);
             if (sender != null) {
@@ -107,18 +102,15 @@ public class NotificationService {
         }
     }
 
-    // Notify registration status change to the specific user
     public void notifyRegistrationStatusChange(Long userId, Long eventId, RegistrationStatus status) {
         User u = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
         Event e = eventRepository.findById(eventId).orElseThrow(() -> new RuntimeException("Event not found"));
-        // Avoid sending duplicate registration notifications for same user+event
         try {
             var existing = notificationRepository.findFirstByUserIdAndRelatedIdAndType(userId, eventId, NotificationType.EVENT_REGISTRATION);
             if (existing.isPresent()) {
-                return; // already notified this user about this event's registration
+                return;
             }
         } catch (Exception ex) {
-            // ignore repository issues and proceed to send
         }
         String verb;
         switch (status) {
@@ -145,19 +137,16 @@ public class NotificationService {
         }
     }
 
-    // Notify when new event is approved -> send to ALL users (webpush + optional entity per user)
     public void notifyNewEvent(Long eventId) {
         Event e = eventRepository.findById(eventId).orElseThrow(() -> new RuntimeException("Event not found"));
         String title = "Sự kiện mới: " + e.getTitle();
         String body = "Sự kiện đã được duyệt. Xem chi tiết và tham gia ngay!";
-        // attempt webpush to all subscriptions
         try {
             webPushNotificationService.sendNotificationToAll(title, body, "/events/" + e.getId());
         } catch (Exception ex) {
             System.err.println("[Notification] broadcast webpush failed: " + ex.getMessage());
         }
 
-        // Persist per-user Notification records (optional): create for active users only to avoid huge insert
         List<User> users = userRepository.findAll();
         for (User u : users) {
             Notification notif = new Notification();
@@ -171,12 +160,10 @@ public class NotificationService {
         }
     }
 
-    // Notify recipient that someone reacted to their post/comment.
     public void notifyReaction(Long recipientUserId, Long relatedId, RelatedType relatedType, ReactionType reactionType) {
         notifyReaction(recipientUserId, relatedId, relatedType, reactionType, null);
     }
 
-    // Overload: include actorUserId
     public void notifyReaction(Long recipientUserId, Long relatedId, RelatedType relatedType, ReactionType reactionType, Long actorUserId) {
         User recipient = userRepository.findById(recipientUserId).orElseThrow(() -> new RuntimeException("User not found"));
         String actorName = null;
@@ -207,7 +194,6 @@ public class NotificationService {
         }
     }
 
-    // Notify comment: someone commented on your post/comment
     public void notifyComment(Long recipientUserId, Long relatedId, RelatedType relatedType, Long actorUserId) {
         User recipient = userRepository.findById(recipientUserId).orElseThrow(() -> new RuntimeException("User not found"));
         String actorName = null;
@@ -233,14 +219,12 @@ public class NotificationService {
         }
     }
 
-    // Read single notification
     public NotificationDTO getNotificationById(Long id, String email) {
         Notification n = notificationRepository.findById(id).orElseThrow(() -> new RuntimeException("Notification not found"));
         if (!n.getUser().getEmail().equals(email)) throw new RuntimeException("Unauthorized");
         return modelMapper.map(n, NotificationDTO.class);
     }
 
-    // List notifications for a user (newest first)
     public List<NotificationDTO> getNotifications(Long userId) {
         List<Notification> list = notificationRepository.findByUserId(userId);
         return list.stream()
@@ -249,7 +233,6 @@ public class NotificationService {
                 .collect(Collectors.toList());
     }
 
-    // Return notifications for a user filtered by event
     public List<NotificationDTO> getNotificationsForEvent(Long eventId, String email) {
         User u = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
         return notificationRepository.findByUserId(u.getId()).stream()
@@ -259,7 +242,6 @@ public class NotificationService {
                 .collect(Collectors.toList());
     }
 
-    // Mark a single notification as read (only owner)
     public NotificationDTO markAsRead(Long id, String email) {
         Notification n = notificationRepository.findById(id).orElseThrow(() -> new RuntimeException("Notification not found"));
         if (!n.getUser().getEmail().equals(email)) throw new RuntimeException("Unauthorized");
@@ -268,7 +250,6 @@ public class NotificationService {
         return modelMapper.map(n, NotificationDTO.class);
     }
 
-    // Mark all notifications for user as read
     public void markAllAsRead(Long userId) {
         List<Notification> list = notificationRepository.findByUserId(userId);
         for (Notification n : list) {
@@ -277,7 +258,6 @@ public class NotificationService {
         notificationRepository.saveAll(list);
     }
 
-    // Delete notification (owner only)
     public void deleteNotification(Long id, String email) {
         Notification n = notificationRepository.findById(id).orElseThrow(() -> new RuntimeException("Notification not found"));
         if (!n.getUser().getEmail().equals(email)) throw new RuntimeException("Unauthorized");

@@ -35,7 +35,6 @@ public class ReportController {
     })
     @PreAuthorize("hasAnyAuthority('ROLE_EVENT_MANAGER', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN')")
     public ResponseEntity<EventReportDTO> getEventReport(@PathVariable Long eventId, Principal principal) {
-        // Principal is provided by Spring Security; no email-in-header required.
         return ResponseEntity.ok(reportService.getEventReport(eventId));
     }
 

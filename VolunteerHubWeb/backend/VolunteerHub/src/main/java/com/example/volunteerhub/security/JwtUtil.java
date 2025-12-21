@@ -30,7 +30,6 @@ public class JwtUtil {
         this.key = Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    // Generate access token
     public String generateToken(String username, String role) {
         return Jwts.builder()
                 .setSubject(username)
@@ -41,7 +40,6 @@ public class JwtUtil {
                 .compact();
     }
 
-    // Generate refresh token
     public String generateRefreshToken(String username) {
         return Jwts.builder()
                 .setSubject(username)
@@ -51,17 +49,14 @@ public class JwtUtil {
                 .compact();
     }
 
-    // Extract username from token
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
     }
 
-    // Extract role from token
     public String extractRole(String token) {
         return extractClaim(token, claims -> claims.get("role", String.class));
     }
 
-    // Generic method to extract claims
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
@@ -75,7 +70,6 @@ public class JwtUtil {
                 .getBody();
     }
 
-    // Validate token
     public boolean validateToken(String token, String username) {
         final String extractedUsername = extractUsername(token);
         return (extractedUsername.equals(username) && !isTokenExpired(token));

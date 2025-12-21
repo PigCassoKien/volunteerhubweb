@@ -12,7 +12,6 @@ function Banner({ onStart }) {
       className="relative bg-cover bg-center bg-no-repeat h-[90vh] flex items-center justify-center"
       style={{ backgroundImage: `url(${heroImg})` }}
     >
-      {/* Overlay xanh lá cây trong suốt */}
       <div className="absolute inset-0 bg-green-900 bg-opacity-70"></div>
 
       {/* Nội dung chính */}

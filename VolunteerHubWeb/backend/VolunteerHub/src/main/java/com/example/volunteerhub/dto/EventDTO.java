@@ -19,7 +19,7 @@ public class EventDTO {
     private Long createdById;
     private String createdByFullName;
     private Integer registeredCount;
-    private String imageFile; // đảm bảo có trường này để frontend hiển thị ảnh
+    private String imageFile;
     private LocalDateTime createdAt;
     private Integer maxParticipants;
 }

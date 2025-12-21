@@ -73,7 +73,6 @@ public class EventRegistrationController {
         return ResponseEntity.ok(list);
     }
 
-        // Public endpoint to fetch registrations (history) for a specific user id.
         @GetMapping("/user/{userId}")
         public ResponseEntity<List<EventRegistrationDTO>> getRegistrationsByUser(@PathVariable Long userId) {
                 List<EventRegistrationDTO> list = registrationService.getRegistrationsByUserId(userId);

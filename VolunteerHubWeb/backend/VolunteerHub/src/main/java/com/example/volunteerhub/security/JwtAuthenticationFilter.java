@@ -48,7 +48,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            // If user exists but is banned, reject immediately
             try {
                 User u = userRepository.findByEmail(username).orElse(null);
                 if (u != null && u.getStatus() == UserStatus.BANNED) {

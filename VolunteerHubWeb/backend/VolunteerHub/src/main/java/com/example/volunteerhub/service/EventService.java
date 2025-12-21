@@ -54,7 +54,6 @@ public class EventService {
         event.setCreatedBy(createdBy);
         event.setStatus(EventStatus.PENDING);
         event.setCreatedAt(LocalDateTime.now());
-        // ensure maxParticipants from DTO is persisted (can be null)
         if (eventDTO.getMaxParticipants() != null) {
             event.setMaxParticipants(eventDTO.getMaxParticipants());
         }
@@ -63,15 +62,12 @@ public class EventService {
     }
 
     // Read
-    // helper: map thêm thông tin creator name + registered count
     private EventDTO mapEventToDTOWithExtras(Event event) {
         EventDTO dto = modelMapper.map(event, EventDTO.class);
-        // creator name
         if (event.getCreatedBy() != null) {
             dto.setCreatedByFullName(event.getCreatedBy().getFullName());
             dto.setCreatedById(event.getCreatedBy().getId());
         }
-        // registered count: tính cả APPROVED và PENDING để thể hiện lượng đăng ký hiện tại
         List<EventRegistration> regs = registrationRepository.findByEventId(event.getId());
         long count = regs.stream()
                 .filter(r -> r.getStatus() == RegistrationStatus.APPROVED || r.getStatus() == RegistrationStatus.PENDING)
@@ -114,7 +110,6 @@ public class EventService {
     public EventDTO updateEvent(Long id, EventDTO eventDTO, String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        // enforce only EVENT_MANAGER allowed
         if (user.getRole() != UserRole.EVENT_MANAGER) {
             throw new RuntimeException("Unauthorized");
         }
@@ -122,7 +117,6 @@ public class EventService {
         Event event = eventRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
 
-        // Partial update: only set when incoming value is not null
         if (eventDTO.getTitle() != null) event.setTitle(eventDTO.getTitle());
         if (eventDTO.getDescription() != null) event.setDescription(eventDTO.getDescription());
         if (eventDTO.getStartDate() != null) event.setStartDate(eventDTO.getStartDate());
@@ -131,7 +125,6 @@ public class EventService {
         if (eventDTO.getCategory() != null) event.setCategory(eventDTO.getCategory());
         if (eventDTO.getMaxParticipants() != null) event.setMaxParticipants(eventDTO.getMaxParticipants());
         if (eventDTO.getImageFile() != null) event.setImageFile(eventDTO.getImageFile());
-        // do not change status unless you explicitly allow it here
 
         event.setUpdatedAt(LocalDateTime.now());
         event = eventRepository.save(event);
@@ -152,7 +145,6 @@ public class EventService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
 
-        // avoid re-sending if already approved
         if (event.getStatus() == EventStatus.APPROVED) {
             return mapEventToDTOWithExtras(event);
         }
@@ -161,7 +153,6 @@ public class EventService {
         event.setUpdatedAt(LocalDateTime.now());
         event = eventRepository.save(event);
 
-        // send web-push + create Notification entities for approved event
         try {
             notificationService.notifyNewEvent(event.getId());
         } catch (Exception ex) {
@@ -186,7 +177,6 @@ public class EventService {
                 .orElseThrow(() -> new RuntimeException("Event not found"));
         EventSocialDTO dto = new EventSocialDTO();
         dto.setEventId(event.getId());
-        // placeholder: nếu Event có trường socialChannel, dùng event.getSocialChannel()
         dto.setSocialChannelUrl("/events/" + event.getId() + "/social-channel");
         dto.setOtherInfo("Only accessible to admin, event manager, or approved volunteers");
         return dto;

@@ -25,7 +25,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u WHERE u.role = :role AND (lower(u.email) LIKE lower(concat('%', :keyword, '%')) OR lower(u.fullName) LIKE lower(concat('%', :keyword, '%')) OR lower(u.address) LIKE lower(concat('%', :keyword, '%')) OR lower(u.phoneNumber) LIKE lower(concat('%', :keyword, '%'))) ")
     Page<User> searchVolunteers(@Param("keyword") String keyword, @Param("role") UserRole role, Pageable pageable);
 
-    // fallback simple search kept for compatibility
     @Query("SELECT u FROM User u WHERE u.role = 'VOLUNTEER' AND (u.email LIKE %:keyword% OR u.fullName LIKE %:keyword%)")
     List<User> searchVolunteersByKeyword(String keyword);
 

@@ -89,7 +89,6 @@ public class PostService {
         post.setMediaFiles(postDTO.getMediaFiles());
         post.setCreatedAt(LocalDateTime.now());
 
-        // Manager posts auto-approved
         post.setStatus(isManagerOfEvent ? PostStatus.APPROVED : PostStatus.PENDING);
 
         post = postRepository.save(post);
@@ -98,11 +97,10 @@ public class PostService {
         dto.setUserId(user.getId());
         dto.setUserFullName(user.getFullName());
         dto.setUserAvatarFile(user.getAvatarFile());
-        dto.setCanDelete(true); // creator can delete own post
+        dto.setCanDelete(true);
         return dto;
     }
 
-    // Read single post
     public PostDTO getPostById(Long id, String email) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Post not found"));
@@ -111,7 +109,6 @@ public class PostService {
                 ? null
                 : userRepository.findByEmail(email).orElse(null);
 
-        // nếu post chưa APPROVED thì chỉ cho: chủ bài, manager của event, hoặc ADMIN xem
         if (post.getStatus() != PostStatus.APPROVED) {
             if (requester == null) {
                 throw new RuntimeException("Post not available");
@@ -145,7 +142,6 @@ public class PostService {
         return dto;
     }
 
-    // Return posts visible to requester: APPROVED OR owner OR event manager or admin
     public List<PostDTO> getPostsByEvent(Long eventId, String requesterEmail) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
@@ -161,10 +157,8 @@ public class PostService {
 
         return all.stream()
                 .filter(p -> {
-                    // luôn cho phép post đã APPROVED
                     if (p.getStatus() == PostStatus.APPROVED) return true;
 
-                    // còn lại chỉ cho: chủ bài, manager của event, ADMIN
                     if (requester == null) return false;
 
                     boolean isOwner = p.getUser() != null && p.getUser().getId().equals(requester.getId());
@@ -198,12 +192,10 @@ public class PostService {
                 .collect(Collectors.toList());
     }
 
-    // Update multipart: append new files and update content
     public PostDTO updatePostMultipart(Long postId, String content, MultipartFile[] mediaFiles, String email) {
         Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Post not found"));
         User requester = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
 
-        // only owner or manager/admin can update
         boolean allowed = (post.getUser() != null && post.getUser().getId().equals(requester.getId()))
                 || requester.getRole() == UserRole.ADMIN
                 || (requester.getRole() == UserRole.EVENT_MANAGER && post.getEvent().getCreatedBy() != null
@@ -212,7 +204,6 @@ public class PostService {
 
         if (content != null) post.setContent(content);
         if (mediaFiles != null && mediaFiles.length > 0) {
-            // save files to upload dir and append names to post.mediaFiles
             try {
                 Path base = getPostBaseDir();
                 for (MultipartFile mf : mediaFiles) {
@@ -231,7 +222,6 @@ public class PostService {
         dto.setUserId(post.getUser() != null ? post.getUser().getId() : null);
         dto.setUserFullName(post.getUser() != null ? post.getUser().getFullName() : null);
         dto.setUserAvatarFile(post.getUser() != null ? post.getUser().getAvatarFile() : null);
-        // compute canDelete for requester: owner/manager/admin
         boolean canDelete = false;
         if (requester != null) {
             if (post.getUser() != null && post.getUser().getId().equals(requester.getId())) canDelete = true;
@@ -243,7 +233,6 @@ public class PostService {
         return dto;
     }
 
-    // Delete post
     @Transactional
     public void deletePost(Long postId, String email) {
         User user = userRepository.findByEmail(email)
@@ -262,21 +251,17 @@ public class PostService {
             throw new RuntimeException("Unauthorized");
         }
 
-        // 1) Xóa reaction trên các comment của post
         List<Comment> comments = commentRepository.findByPostId(postId);
         for (Comment c : comments) {
             reactionRepository.deleteByCommentId(c.getId());
         }
 
-        // 2) Xóa reaction trực tiếp trên post
         reactionRepository.deleteByPostId(postId);
 
-        // 3) Xóa comment
         if (!comments.isEmpty()) {
             commentRepository.deleteAll(comments);
         }
 
-        // 4) Cuối cùng xóa post
         postRepository.delete(post);
     }
 
@@ -338,7 +323,6 @@ public class PostService {
         return dto;
     }
 
-    // Delete single media file from a post (called by controller)
     public PostDTO deletePostMedia(Long postId, String mediaPath, String email) {
         Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Post not found"));
         User requester = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
@@ -355,11 +339,9 @@ public class PostService {
             throw new RuntimeException("Media không tồn tại trong bài viết");
         }
 
-        // remove from list and persist
         post.getMediaFiles().removeIf(m -> m.equals(mediaPath));
         postRepository.save(post);
 
-        // attempt to delete physical file if stored locally
         try {
             Path base = getPostBaseDir();
             Path target = base.resolve(mediaPath).normalize();
@@ -367,7 +349,6 @@ public class PostService {
                 Files.delete(target);
             }
         } catch (Exception ex) {
-            // ignore deletion errors but log
             System.err.println("[PostService] Failed to delete media file: " + ex.getMessage());
         }
         return null;

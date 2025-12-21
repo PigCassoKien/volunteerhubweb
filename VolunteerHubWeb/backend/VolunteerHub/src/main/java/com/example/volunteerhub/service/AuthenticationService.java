@@ -24,7 +24,6 @@ public class AuthenticationService {
 
     public AuthenticationResponse login(LoginRequestDTO loginRequest, String ipAddress) {
 
-        // Xác thực email + password
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         loginRequest.getEmail(),
@@ -32,19 +31,15 @@ public class AuthenticationService {
                 )
         );
 
-        // Lấy user từ DB
         User user = userRepository.findByEmail(loginRequest.getEmail())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-                // refuse login for locked/banned accounts
                 if (user.getStatus() != null && user.getStatus().name().equals("BANNED")) {
                         throw new RuntimeException("Account locked");
                 }
 
-        // Tạo JWT token
         String jwtToken = jwtService.generateToken(user, ipAddress);
 
-        // Convert sang DTO
         UserResponseDTO dto = new UserResponseDTO();
         dto.setId(user.getId());
         dto.setEmail(user.getEmail());
@@ -54,7 +49,6 @@ public class AuthenticationService {
         dto.setAvatarFile(user.getAvatarFile());
         dto.setRole(user.getRole());
 
-        // Trả về token + user
         return AuthenticationResponse.builder()
                 .token(jwtToken)
                 .user(dto)
